@@ -1,0 +1,15 @@
+9/12/2022
+
+This distribution has all the library developments associated with the VTP boards to support both Triggered readout through the VTP as well as Streaming readout (using FADC modules with appropriate firmware). 
+
+
+The directory  vtp has all the library changes to support a VTP hardware ROC and updates for both Triggered and Streaming readout. The firmware, rol and config directories in the vtp directory are old and are generally not viable any more.
+
+The directories config and rol have config files and readout lists (and header files) used for the the VTP Triggered and Streaming Firmware
+
+The directory firmware has the latest firmware files for both Triggered and Streaming readout support from the VTP. 
+
+
+Questions...
+contact David Abbott  x7190
+

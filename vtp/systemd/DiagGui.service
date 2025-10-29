@@ -1,0 +1,13 @@
+[Unit]
+Description=DiagGui Service
+Wants=remote-fs.target
+After=remote-fs.target
+After=vtp_fpga_load.service
+
+[Service]
+Environment="LD_LIBRARY_PATH=/usr/local/src/vtp:/usr/local/lib"
+Environment="VTP_PARAMS=/usr/local/src/vtp/params/"
+ExecStart=/usr/local/src/vtp/DiagGui/DiagGuiServer
+
+[Install]
+WantedBy=multi-user.target

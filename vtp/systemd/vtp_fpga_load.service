@@ -1,0 +1,14 @@
+[Unit]
+Description=Zync FPGA Firmware Loading Service
+Wants=remote-fs.target
+After=remote-fs.target
+Before=DiagGui.service
+
+[Service]
+Type=oneshot
+Environment="LD_LIBRARY_PATH=/usr/local/src/vtp:/usr/local/lib"
+Environment="VTP_PARAMS=/usr/local/src/vtp/params"
+ExecStart=/usr/local/src/vtp/firmware/vtpFirmwareLoad
+
+[Install]
+WantedBy=multi-user.target
