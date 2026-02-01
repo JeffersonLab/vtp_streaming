@@ -490,6 +490,16 @@ vtpInitGlobals()
     vtpConf.compton.trig.prescale[i] = 0;
     vtpConf.compton.trig.delay[i] = 0;
   }
+
+  /* Streaming configuration - defaults match previous hard-coded values */
+  strcpy(vtpConf.streaming.stats_host, "129.57.29.231");
+  vtpConf.streaming.stats_port = 19531;
+  vtpConf.streaming.stats_inst = 0;
+  vtpConf.streaming.sync_pkt_len = 28;
+  vtpConf.streaming.num_connections = 1;
+  vtpConf.streaming.net_mode = 1;       /* 1=UDP, 0=TCP */
+  vtpConf.streaming.enable_ejfat = 1;
+  vtpConf.streaming.local_port = 10001;
 }
 
 
@@ -669,6 +679,88 @@ vtpReadConfigFile(char *filename_in)
 		{
 		  sscanf(str_tmp, "%*s %250s", vtpConf.fw_filename_z7);
 		  printf("VTP_FIRMWARE = %s\n", vtpConf.fw_filename_z7);
+		}
+	      else if(!strcmp(keyword,"VTP_STATS_HOST"))
+		{
+		  sscanf(str_tmp, "%*s %250s", vtpConf.streaming.stats_host);
+		  printf("VTP_STATS_HOST = %s\n", vtpConf.streaming.stats_host);
+		}
+	      else if(!strcmp(keyword,"VTP_STATS_PORT"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] > 0 && argi[0] < 65536) {
+		    vtpConf.streaming.stats_port = argi[0];
+		    printf("VTP_STATS_PORT = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_STATS_PORT %d (must be 1-65535), using default %d\n",
+			   argi[0], vtpConf.streaming.stats_port);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_STATS_INST"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] >= 0 && argi[0] < 4) {
+		    vtpConf.streaming.stats_inst = argi[0];
+		    printf("VTP_STATS_INST = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_STATS_INST %d (must be 0-3), using default %d\n",
+			   argi[0], vtpConf.streaming.stats_inst);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_SYNC_PKT_LEN"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] > 0 && argi[0] < 1500) {
+		    vtpConf.streaming.sync_pkt_len = argi[0];
+		    printf("VTP_SYNC_PKT_LEN = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_SYNC_PKT_LEN %d (must be 1-1499), using default %d\n",
+			   argi[0], vtpConf.streaming.sync_pkt_len);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_NUM_CONNECTIONS"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] >= 1 && argi[0] <= 4) {
+		    vtpConf.streaming.num_connections = argi[0];
+		    printf("VTP_NUM_CONNECTIONS = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_NUM_CONNECTIONS %d (must be 1-4), using default %d\n",
+			   argi[0], vtpConf.streaming.num_connections);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_NET_MODE"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] == 0 || argi[0] == 1) {
+		    vtpConf.streaming.net_mode = argi[0];
+		    printf("VTP_NET_MODE = %d (%s)\n", argi[0], argi[0] ? "UDP" : "TCP");
+		  } else {
+		    printf("WARNING: Invalid VTP_NET_MODE %d (must be 0=TCP or 1=UDP), using default %d\n",
+			   argi[0], vtpConf.streaming.net_mode);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_ENABLE_EJFAT"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] == 0 || argi[0] == 1) {
+		    vtpConf.streaming.enable_ejfat = argi[0];
+		    printf("VTP_ENABLE_EJFAT = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_ENABLE_EJFAT %d (must be 0 or 1), using default %d\n",
+			   argi[0], vtpConf.streaming.enable_ejfat);
+		  }
+		}
+	      else if(!strcmp(keyword,"VTP_LOCAL_PORT"))
+		{
+		  sscanf(str_tmp, "%*s %d", &argi[0]);
+		  if(argi[0] > 0 && argi[0] < 65536) {
+		    vtpConf.streaming.local_port = argi[0];
+		    printf("VTP_LOCAL_PORT = %d\n", argi[0]);
+		  } else {
+		    printf("WARNING: Invalid VTP_LOCAL_PORT %d (must be 1-65535), using default %d\n",
+			   argi[0], vtpConf.streaming.local_port);
+		  }
 		}
 	      else if(!strcmp(keyword,"VTP_REFCLK"))
 		{
@@ -2996,4 +3088,55 @@ void
 vtpMon()
 {
   return;
+}
+
+/* Accessor functions for streaming config values */
+const char* vtpGetStatsHost(void)
+{
+  return vtpConf.streaming.stats_host;
+}
+
+int vtpGetStatsPort(void)
+{
+  return vtpConf.streaming.stats_port;
+}
+
+int vtpGetStatsInst(void)
+{
+  return vtpConf.streaming.stats_inst;
+}
+
+int vtpGetSyncPktLen(void)
+{
+  return vtpConf.streaming.sync_pkt_len;
+}
+
+int vtpGetNumConnections(void)
+{
+  return vtpConf.streaming.num_connections;
+}
+
+int vtpGetNetMode(void)
+{
+  return vtpConf.streaming.net_mode;
+}
+
+int vtpGetEnableEjfat(void)
+{
+  return vtpConf.streaming.enable_ejfat;
+}
+
+int vtpGetLocalPort(void)
+{
+  return vtpConf.streaming.local_port;
+}
+
+const char* vtpGetFirmwareZ7(void)
+{
+  return vtpConf.fw_filename_z7;
+}
+
+const char* vtpGetFirmwareV7(void)
+{
+  return vtpConf.fw_filename_v7;
 }

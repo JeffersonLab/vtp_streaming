@@ -144,6 +144,18 @@ typedef struct {
 
   struct
   {
+    char stats_host[FNLEN];  /* UDP stats destination host */
+    int stats_port;           /* UDP stats destination port (1-65535) */
+    int stats_inst;           /* Stream instance to sample (0-3) */
+    int sync_pkt_len;         /* Sync packet length in bytes */
+    int num_connections;      /* Number of VTP network streams (1-4) */
+    int net_mode;             /* Network mode: 0=TCP, 1=UDP */
+    int enable_ejfat;         /* Enable EJFAT headers: 0=off, 1=on */
+    int local_port;           /* Local port base (0-65535) */
+  } streaming;
+
+  struct
+  {
     unsigned int fadcsum_ch_en[16];
     struct
     {
@@ -358,5 +370,17 @@ int vtpDownloadAll();
 int vtpUploadAll(char *string, int length);
 int vtpConfig(char *fname);
 void vtpMon();
+
+/* Accessor functions for streaming config values */
+const char* vtpGetStatsHost(void);
+int vtpGetStatsPort(void);
+int vtpGetStatsInst(void);
+int vtpGetSyncPktLen(void);
+int vtpGetNumConnections(void);
+int vtpGetNetMode(void);
+int vtpGetEnableEjfat(void);
+int vtpGetLocalPort(void);
+const char* vtpGetFirmwareZ7(void);
+const char* vtpGetFirmwareV7(void);
 
 #endif

@@ -1,8 +1,43 @@
 VTP_CRATE davtp3
 
-# Streaming V2 firmware
-VTP_FIRMWARE_Z7           fe_vtp_z7_streamingv3_Mar02.bin
-VTP_FIRMWARE_V7           fe_vtp_v7_fadc_streamingv3_Mar15.2.bin
+###################################################
+# Firmware Configuration
+###################################################
+# Z7 FPGA firmware - Local aggregation and formatting
+VTP_FIRMWARE_Z7           fe_vtp_z7_streamingv3_ejfat_v5.bin
+# V7 FPGA firmware - FADC readout
+VTP_FIRMWARE_V7           fe_vtp_v7_fadc_streamingv3_ejfat.bin
+
+###################################################
+# UDP Statistics/Sync Sender Configuration
+###################################################
+# Destination host for 1Hz sync packets (hostname or IP address)
+# Default: 129.57.29.231 (indra-s2 for forwarding to JLAB EJFAT LB)
+VTP_STATS_HOST            129.57.29.231
+
+# Destination UDP port for sync packets (1-65535)
+VTP_STATS_PORT            19531
+
+# Stream instance to sample for statistics (0-3)
+VTP_STATS_INST            0
+
+# Sync packet length in bytes (typically 28)
+VTP_SYNC_PKT_LEN          28
+
+###################################################
+# Network Streaming Configuration
+###################################################
+# Number of VTP network stream connections (1-4)
+VTP_NUM_CONNECTIONS       1
+
+# Network transport mode: 0=TCP, 1=UDP
+VTP_NET_MODE              1
+
+# Enable EJFAT packet headers: 0=disabled, 1=enabled (UDP only)
+VTP_ENABLE_EJFAT          1
+
+# Base local port number for connections (1-65535)
+VTP_LOCAL_PORT            10001
 
 
 #        slot: 10 13  9 14  8 15  7 16  6 17  5 18  4 19  3 20

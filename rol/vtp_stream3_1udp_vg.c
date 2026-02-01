@@ -48,9 +48,14 @@ int vtpComptonEnableScalerReadout = 0;
 int trigBankType = 0xff10;
 int firstEvent;
 
-#define NUM_VTP_CONNECTIONS 1   /* can be up to 4 */
-#define VTP_NET_MODE        1   /*  0=TCP 1=UDP   */
-#define ENABLE_EJFAT        1   /* Enable EJFAT Headers - only valid for UDP transport */
+/*
+ * Network streaming configuration now read from config file.
+ * Default values in vtpConfig.c match previous hard-coded values:
+ * - VTP_NUM_CONNECTIONS: 1 (can be 1-4)
+ * - VTP_NET_MODE: 1 (0=TCP, 1=UDP)
+ * - VTP_ENABLE_EJFAT: 1 (Enable EJFAT headers - UDP only)
+ * - VTP_LOCAL_PORT: 10001 (base local port)
+ */
 
 /* define an array of Payload port Config Structures */
 PP_CONF ppInfo[16];
@@ -60,7 +65,8 @@ PP_CONF ppInfo[16];
 #define CMSG_MAGIC_INT2 0x20697320
 #define CMSG_MAGIC_INT3 0x636f6f6c
 */
-unsigned int emuData[] = {0x634d7367,0x20697320,0x636f6f6c,6,0,4196352,NUM_VTP_CONNECTIONS,0};
+/* Note: emuData[6] will be set to vtpGetNumConnections() in rocPrestart() */
+unsigned int emuData[] = {0x634d7367,0x20697320,0x636f6f6c,6,0,4196352,1,0};
 /*unsigned int emuData[] = {0x67734d63,0x20736920,0x6cf6f663,0x06000000,0,0x00084000,0x01000000,0x01000000};*/
 
 /* =========================[ ADDED: VTP helpers ]========================= */
@@ -127,28 +133,21 @@ vtp_read_dest_from_cfg(const char *cfg_path,
 }
 
 /* =========================[ ADDED: UDP stats sender ]========================= */
-#ifndef VTP_STATS_HOST
-// Here is indra-s2  IP for forwrding sync packets from ROL on 29 to JLAB EJFAT LB.
-// Note this is required since CODA DAQ 29 is not visible to JLAB EJFAT 177
-#define VTP_STATS_HOST "129.57.29.231"  
-#endif
-
-#ifndef VTP_STATS_PORT
-#define VTP_STATS_PORT 19531             /* can be overridden by env VTP_STATS_PORT */
-#endif
-
-#ifndef VTP_STATS_INST
-#define VTP_STATS_INST 0                 /* stream instance to sample */
-#endif
-
-enum { VTP_SYNC_PKT_LEN = 28 };
+/*
+ * Stats sender configuration now read from config file.
+ * Default values in vtpConfig.c match previous hard-coded values:
+ * - VTP_STATS_HOST: "129.57.29.231" (indra-s2 IP for forwarding sync packets)
+ * - VTP_STATS_PORT: 19531
+ * - VTP_STATS_INST: 0
+ * - VTP_SYNC_PKT_LEN: 28
+ */
 
 static pthread_t g_vtp_stats_thr;
 static volatile int g_vtp_stats_run = 0;
 static int g_vtp_stats_sock = -1;
 static struct sockaddr_storage g_vtp_stats_dst;
 static socklen_t g_vtp_stats_dst_len = 0;
-static int g_vtp_stats_inst = VTP_STATS_INST;
+static int g_vtp_stats_inst = 0;  /* Set by vtp_stats_sender_launch() from config */
 
 /* Helper for 64-bit network byte order (big endian) */
 static inline uint64_t htonll(uint64_t val) {
@@ -248,11 +247,13 @@ static void *_vtp_stats_sender_main(void *arg)
     uint64_t timestamp_ns = fc_ext * 65535ULL;
 
     /* Prepare sync packet buffer */
-    char buf[VTP_SYNC_PKT_LEN];
+    int pkt_len = vtpGetSyncPktLen();
+    char buf[256];  /* Large enough for any reasonable sync packet */
+    if (pkt_len > (int)sizeof(buf)) pkt_len = sizeof(buf);
     setSyncData(buf, 1, src_id, fc_ext, evt_rate, timestamp_ns);
 
     /* Send sync packet */
-    (void)sendto(g_vtp_stats_sock, buf, sizeof(buf), 0,
+    (void)sendto(g_vtp_stats_sock, buf, pkt_len, 0,
                  (struct sockaddr *)&g_vtp_stats_dst, g_vtp_stats_dst_len);
 
     /* Update previous frame count for next iteration */
@@ -295,7 +296,7 @@ static int vtp_stats_sender_stop(void)
   if (g_vtp_stats_sock >= 0) { close(g_vtp_stats_sock); g_vtp_stats_sock = -1; }
   memset(&g_vtp_stats_dst, 0, sizeof(g_vtp_stats_dst));
   g_vtp_stats_dst_len = 0;
-  g_vtp_stats_inst = VTP_STATS_INST;
+  g_vtp_stats_inst = 0;
   return OK;
 }
 
@@ -318,11 +319,19 @@ if (!coda || !*coda) {
   char buf[1000];
   /* Streaming Version 3 firmware files for VTP */
 
-  // Local aggregation and formatting firmware
-  const char *z7file="fe_vtp_z7_streamingv3_ejfat_v5.bin";   /* Test of EJFAT formatting */
+  /* Get firmware filenames from config (already set by vtpConfig) */
+  const char *z7file = vtpGetFirmwareZ7();
+  const char *v7file = vtpGetFirmwareV7();
 
-  // FADC readout firmware
-  const char *v7file="fe_vtp_v7_fadc_streamingv3_ejfat.bin"; /* Test of EJFAT formatting */
+  /* Validate firmware filenames */
+  if (!z7file || !*z7file) {
+    printf("WARNING: Z7 firmware filename not set in config, using default\n");
+    z7file = "fe_vtp_z7_streamingv3_ejfat_v5.bin";
+  }
+  if (!v7file || !*v7file) {
+    printf("WARNING: V7 firmware filename not set in config, using default\n");
+    v7file = "fe_vtp_v7_fadc_streamingv3_ejfat.bin";
+  }
 
   firstEvent = 1;
 
@@ -361,8 +370,16 @@ rocPrestart()
 {
   unsigned int emuip = 0, emuport = 0;
   int ii, stat, ppmask=0;
-  int netMode=VTP_NET_MODE; // 0=TCP, 1=UDP
-  int localport = 10001; // default local TCP port
+  int netMode;      // 0=TCP, 1=UDP (from config)
+  int localport;    // base local TCP port (from config)
+  int numConnections;  // Number of VTP connections (from config)
+  int enableEjfat;  // Enable EJFAT headers (from config)
+
+  /* Get network streaming config values */
+  netMode = vtpGetNetMode();
+  localport = vtpGetLocalPort();
+  numConnections = vtpGetNumConnections();
+  enableEjfat = vtpGetEnableEjfat();
 
   VTPflag = 0;
 
@@ -430,13 +447,14 @@ rocPrestart()
 
   /* Update the Streaming EB configuration for the new firmware to get the correct PP Mask and ROCID
      PP mask, nstreams, frame_len (ns), ROCID, ppInfo  */
-  vtpStreamingSetEbCfg(ppmask, NUM_VTP_CONNECTIONS, 0xffff, ROCID, ppInfo);
+  vtpStreamingSetEbCfg(ppmask, numConnections, 0xffff, ROCID, ppInfo);
   emuData[4] = ROCID;  /* define ROCID in the EMU Connection data as well*/
+  emuData[6] = numConnections;  /* Update number of connections from config */
 
   /* If UDP transport then disable cMsg Headers, if EJFAT then enable those headers*/
   if(netMode) {
     vtpStreamingEbDisable(VTP_STREB_CMSG_HDR_EN);
-    if(ENABLE_EJFAT) vtpStreamingEbEnable(VTP_STREB_EJFAT_EN);
+    if(enableEjfat) vtpStreamingEbEnable(VTP_STREB_EJFAT_EN);
   }
 
   /* Enable the Streaming EB to allow Async Events. Disable Stream processing for the moment */
@@ -481,7 +499,7 @@ rocPrestart()
       );
 
     /* Loop over all connections */
-    for (inst=0;inst<NUM_VTP_CONNECTIONS;inst++) {
+    for (inst=0;inst<numConnections;inst++) {
 
       /* Increment the Local IP and MAC address for each Network connection */
       printf("Stream # %d\n",(inst+1));
@@ -541,7 +559,7 @@ rocPrestart()
   }
 
   /* Send a Prestart Event to each stream */
-  for(ii=0;ii<NUM_VTP_CONNECTIONS;ii++) {
+  for(ii=0;ii<numConnections;ii++) {
     vtpStreamingEvioWriteControl(ii,EV_PRESTART,rol->runNumber,rol->runType);
   }
 
@@ -568,17 +586,28 @@ void
 rocGo()
 {
   int ii, stat;
+  int numConnections = vtpGetNumConnections();
 
   /* ADDED: launch 1 Hz UDP status sender at GO begin */
+  /* Get config values, but allow env var override for backward compatibility */
   const char *host = getenv("VTP_STATS_HOST");
   char *port_env = getenv("VTP_STATS_PORT");
-  uint16_t port = VTP_STATS_PORT;
-  if (!host || !*host) host = VTP_STATS_HOST;
+  uint16_t port;
+  int inst;
+
+  if (!host || !*host) host = vtpGetStatsHost();
+
   if (port_env && *port_env) {
     long pv = strtol(port_env, NULL, 10);
     if (pv > 0 && pv < 65536) port = (uint16_t)pv;
+    else port = (uint16_t)vtpGetStatsPort();
+  } else {
+    port = (uint16_t)vtpGetStatsPort();
   }
-  (void)vtp_stats_sender_launch(host, port, VTP_STATS_INST);
+
+  inst = vtpGetStatsInst();
+
+  (void)vtp_stats_sender_launch(host, port, inst);
 
   /* Enable the Streaming EB */
   /* vtpStreamingEbGo(); */
@@ -607,7 +636,7 @@ rocGo()
   vtpSDPrintScalers();
 
   /*Send Go Event*/
-  for(ii=0;ii<NUM_VTP_CONNECTIONS;ii++) {
+  for(ii=0;ii<numConnections;ii++) {
     vtpStreamingEvioWriteControl(ii,EV_GO,0,0);
   }
 
@@ -629,6 +658,7 @@ rocEnd()
 {
   int ii, stat, status;
   unsigned int nFrames;
+  int numConnections = vtpGetNumConnections();
 
   VTPflag = 0;
   CDODISABLE(VTP, 1, 0);
@@ -650,7 +680,7 @@ rocEnd()
     printf("Error in vtpStreamingEbEnable()\n");
 
   /*Send End Event to instance 0*/
-  for(ii=0;ii<NUM_VTP_CONNECTIONS;ii++) {
+  for(ii=0;ii<numConnections;ii++) {
     nFrames = vtpStreamingFramesSent(ii);
     vtpStreamingEvioWriteControl(ii,EV_END,rol->runNumber,nFrames);
     printf("rocEnd: Stream %d - Wrote End Event (total %d frames)\n",ii, nFrames);
@@ -661,7 +691,7 @@ rocEnd()
   /* vtpStreamingEbReset(); */
 
   /* Disconnect the Socket - Client Mode TCP connections */
-  for(ii=0;ii<NUM_VTP_CONNECTIONS;ii++) {
+  for(ii=0;ii<numConnections;ii++) {
     status = vtpStreamingTcpConnect(ii,0,0,0);
     if(status == ERROR) {
       printf("rocEnd: Error closing socket on link %d\n",ii);
