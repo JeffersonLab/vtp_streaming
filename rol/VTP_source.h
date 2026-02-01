@@ -26,6 +26,18 @@ int vtpUploadAll(char *string, int length);
 extern int vtpConfig(char *fname);
 extern void vtpInitGlobals();
 
+/* Accessor functions for streaming config values */
+extern const char* vtpGetStatsHost(void);
+extern int vtpGetStatsPort(void);
+extern int vtpGetStatsInst(void);
+extern int vtpGetSyncPktLen(void);
+extern int vtpGetNumConnections(void);
+extern int vtpGetNetMode(void);
+extern int vtpGetEnableEjfat(void);
+extern int vtpGetLocalPort(void);
+extern const char* vtpGetFirmwareZ7(void);
+extern const char* vtpGetFirmwareV7(void);
+
 #define VTP_READ_CONF_FILE {				\
     vtpInitGlobals();					\
     vtpConfig("");					\
