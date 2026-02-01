@@ -73,13 +73,70 @@ static int vtp_get_src_id(uint32_t *out)
   return OK;
 }
 
+/* Helper: read VTP_STREAMING_DESTIP and VTP_STREAMING_DESTIPPORT from cfg file */
+static void
+vtp_read_dest_from_cfg(const char *cfg_path,
+                       unsigned int *emuip,
+                       unsigned int *emuport)
+{
+  FILE *f;
+  char line[1024];
+
+  if (!cfg_path)
+    return;
+
+  f = fopen(cfg_path, "r");
+  if (!f)
+  {
+    printf("vtp_read_dest_from_cfg: cannot open config file '%s'\n", cfg_path);
+    return;
+  }
+
+  while (fgets(line, sizeof(line), f))
+  {
+    char key[128];
+    char val[512];
+
+    /* Skip comments and blank lines */
+    if (line[0] == '#' || line[0] == '\n')
+      continue;
+
+    if (sscanf(line, "%127s %511s", key, val) != 2)
+      continue;
+
+    if (strcmp(key, "VTP_STREAMING_DESTIP") == 0)
+    {
+      /* Expect dotted-quad string, e.g. 192.188.29.11 */
+      printf("DDD = '%s'\n", val);
+      unsigned int ip = vtpRoc_inet_addr(val);
+      if (ip != 0)
+        *emuip = ip;
+      printf("DDD = '%08x'\n", *emuip);
+    }
+    else if (strcmp(key, "VTP_STREAMING_DESTIPPORT") == 0)
+    {
+      unsigned int port_tmp;
+      printf("DDD = '%s'\n", val);
+      if (sscanf(val, "%u", &port_tmp) == 1)
+        *emuport = port_tmp;
+      printf("DDD = '%08x'\n", *emuport);
+    }
+  }
+
+  fclose(f);
+}
+
 /* =========================[ ADDED: UDP stats sender ]========================= */
 #ifndef VTP_STATS_HOST
-#define VTP_STATS_HOST "192.188.29.10"   /* can be overridden by env VTP_STATS_HOST */
+// Here is indra-s2  IP for forwrding sync packets from ROL on 29 to JLAB EJFAT LB.
+// Note this is required since CODA DAQ 29 is not visible to JLAB EJFAT 177
+#define VTP_STATS_HOST "129.57.29.231"  
 #endif
+
 #ifndef VTP_STATS_PORT
-#define VTP_STATS_PORT 19523             /* can be overridden by env VTP_STATS_PORT */
+#define VTP_STATS_PORT 19531             /* can be overridden by env VTP_STATS_PORT */
 #endif
+
 #ifndef VTP_STATS_INST
 #define VTP_STATS_INST 0                 /* stream instance to sample */
 #endif
@@ -250,27 +307,21 @@ static int vtp_stats_sender_stop(void)
 void
 rocDownload()
 {
+// Check and get CODA env variable.
+const char *coda = getenv("CODA");
+if (!coda || !*coda) {
+    fprintf(stderr, "ERROR: CODA env var is not set\n");
+    return;
+}
+  
   int stat;
   char buf[1000];
   /* Streaming Version 3 firmware files for VTP */
-  /*const char *z7file="fe_vtp_z7_streamingv2_jan27.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_Mar15.2.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_Mar18.9K.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_Mar18.9K.Cl.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_jun22.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_july19.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_aug12.bin";*/
-  /*const char *z7file="fe_vtp_z7_streamingv3_Jan11_23.bin";*/
-  const char *z7file="fe_vtp_z7_streamingv3_ejfat.bin";   /* Test of EJFAT formatting */
 
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv2_feb10.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_Mar02.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_Mar23.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_Apr13.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_jun17.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_Aug22.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_sept27.bin";*/
-  /*const char *v7file="fe_vtp_v7_fadc_streamingv3_dec9.bin";*/
+  // Local aggregation and formatting firmware
+  const char *z7file="fe_vtp_z7_streamingv3_ejfat_v5.bin";   /* Test of EJFAT formatting */
+
+  // FADC readout firmware
   const char *v7file="fe_vtp_v7_fadc_streamingv3_ejfat.bin"; /* Test of EJFAT formatting */
 
   firstEvent = 1;
@@ -283,14 +334,18 @@ rocDownload()
   }
 
   /* Load firmware here */
-  sprintf(buf, "/usr/local/src/vtp/firmware/%s", z7file);
-  if(vtpZ7CfgLoad(buf) != OK)
+snprintf(buf, sizeof(buf), "%s/src/vtp/vtp_streaming/vtp/firmware/%s", coda, z7file);
+//sprintf(buf, "/home/ejfat/coda-vg/3.10_devel2/src/vtp/vtp_streaming/vtp/firmware/%s", z7file);
+
+ if(vtpZ7CfgLoad(buf) != OK)
   {
     printf("Z7 programming failed... (%s)\n", buf);
   }
 
-  sprintf(buf, "/usr/local/src/vtp/firmware/%s", v7file);
-  if(vtpV7CfgLoad(buf) != OK)
+snprintf(buf, sizeof(buf), "%s/src/vtp/vtp_streaming/vtp/firmware/%s", coda, v7file);
+//sprintf(buf, "/home/ejfat/coda-vg/3.10_devel2/src/vtp/vtp_streaming/vtp/firmware/%s", v7file);
+
+ if(vtpV7CfgLoad(buf) != OK)
   {
     printf("V7 programming failed... (%s)\n", buf);
   }
@@ -304,7 +359,7 @@ rocDownload()
 void
 rocPrestart()
 {
-  unsigned int emuip, emuport;
+  unsigned int emuip = 0, emuport = 0;
   int ii, stat, ppmask=0;
   int netMode=VTP_NET_MODE; // 0=TCP, 1=UDP
   int localport = 10001; // default local TCP port
@@ -328,30 +383,48 @@ rocPrestart()
 
   printf("%s: rol->usrConfig = %s\n", __func__, rol->usrConfig);
 
-  /* Read Config file and Intialize VTP variables */
+  /* Read Config file and Initialize VTP variables */
   vtpInitGlobals();
   if(rol->usrConfig)
     vtpConfig(rol->usrConfig);
 
-  /* Get EB connection info to program the VTP TCP stack */
-  emuip = vtpRoc_inet_addr(rol->rlinkP->net);
-  emuport = rol->rlinkP->port;
-  printf("EMU Info from ROC:  IP=0x%08x  port=%d\n",emuip,emuport);
-  /*  emuip   = vtpRoc_inet_addr("129.57.109.232"); */
-  emuip   = vtpRoc_inet_addr("192.188.29.10"); /* ESnet LB data link */
-  emuport = 19522;   /* ESnet LB data link port */
+  /* Try to get DESTIP/DESTIPPORT from VTP config file */
+  if (rol->usrConfig)
+    vtp_read_dest_from_cfg(rol->usrConfig, &emuip, &emuport);
+
+  /* Fallback to CODA ROC link info if config did not set them */
+  if (emuip == 0 || emuport == 0)
+  {
+    unsigned int fallback_ip   = vtpRoc_inet_addr(rol->rlinkP->net);
+    unsigned int fallback_port = rol->rlinkP->port;
+    printf("vtp_read_dest_from_cfg did not fully set EMU dest, "
+           "falling back to ROC link: ip=0x%08x port=%d\n",
+           fallback_ip, fallback_port);
+
+    if (emuip == 0)   emuip   = fallback_ip;
+    if (emuport == 0) emuport = fallback_port;
+  }
+
   localport = localport + netMode;
-  printf(" EMU IP = 0x%08x  Port= %d  Localport = %d\n",emuip, emuport, localport);
+
+  printf("EMU DEST from cfg/ROC: IP=0x%08x port=%d localport=%d\n",
+         emuip, emuport, localport);
 
   /* Configure all the payload ports - total of 8
      pp_id, ppInfo, moduleID, lag, bank_tag, stream#
      8 FADCs to Stream 1 */
-  vtpPayloadConfig(2,ppInfo,1,1,0,1);
-  vtpPayloadConfig(4,ppInfo,1,1,0,1);
-  vtpPayloadConfig(5,ppInfo,1,1,0,1);
-  vtpPayloadConfig(7,ppInfo,1,1,0,1);
-  vtpPayloadConfig(10,ppInfo,1,1,0,1);
-  vtpPayloadConfig(12,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(2,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(4,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(5,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(7,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(10,ppInfo,1,1,0,1);
+  //  vtpPayloadConfig(12,ppInfo,1,1,0,1);
+
+// DAQ testbed
+//  vtpPayloadConfig(6,ppInfo,1,1,0,1);
+//  ppmask = vtpPayloadConfig(8,ppInfo,1,1,0,1);
+
+// Hall-B test2
   vtpPayloadConfig(13,ppInfo,1,1,0,1);
   ppmask = vtpPayloadConfig(15,ppInfo,1,1,0,1);
 
@@ -388,11 +461,11 @@ rocPrestart()
     unsigned char udpaddr[4], tcpaddr[4], destip[4];
     unsigned int tcpport, udpport;
 
-    /* fix the destination IP address so it is correct */
-    destip[3] = (emuip&0xFF);
-    destip[2] = (emuip&0xFF00)>>8;
-    destip[1] = (emuip&0xFF0000)>>16;
-    destip[0] = (emuip&0xFF000000)>>24;
+    /* fix the destination IP address so it is correct (from emuip) */
+    destip[3] = (emuip & 0xFF);
+    destip[2] = (emuip & 0xFF00) >> 8;
+    destip[1] = (emuip & 0xFF0000) >> 16;
+    destip[0] = (emuip & 0xFF000000) >> 24;
 
     /* Get the base network port info from the initial Config file */
     vtpStreamingGetNetCfg(
@@ -410,7 +483,7 @@ rocPrestart()
     /* Loop over all connections */
     for (inst=0;inst<NUM_VTP_CONNECTIONS;inst++) {
 
-      /* Increment the Local IP and MAC address and destination port for each Network connection */
+      /* Increment the Local IP and MAC address for each Network connection */
       printf("Stream # %d\n",(inst+1));
       if(inst>0) {
         ipaddr[3] = ipaddr[3] + 1;
@@ -421,7 +494,8 @@ rocPrestart()
       printf(" ipaddr=%d.%d.%d.%d\n",ipaddr[0],ipaddr[1],ipaddr[2],ipaddr[3]);
       printf(" subnet=%d.%d.%d.%d\n",subnet[0],subnet[1],subnet[2],subnet[3]);
       printf(" gateway=%d.%d.%d.%d\n",gateway[0],gateway[1],gateway[2],gateway[3]);
-      printf(" mac=%02x:%02x:%02x:%02x:%02x:%02x\n",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+      printf(" mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
+             mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
       printf(" udpaddr=%d.%d.%d.%d\n",udpaddr[0],udpaddr[1],udpaddr[2],udpaddr[3]);
       printf(" tcpaddr=%d.%d.%d.%d\n",tcpaddr[0],tcpaddr[1],tcpaddr[2],tcpaddr[3]);
       printf(" udpport=0x%08x  tcpport=0x%08x\n",udpport, tcpport);
@@ -435,8 +509,8 @@ rocPrestart()
           gateway,
           mac,
           destip,
-          emuport,
-          localport
+          emuport,   /* DESTIPPORT from cfg */
+          localport  /* local port (still from code) */
       );
 
       /* Read them back one more time */
@@ -454,16 +528,14 @@ rocPrestart()
       printf(" ipaddr=%d.%d.%d.%d\n",ipaddr[0],ipaddr[1],ipaddr[2],ipaddr[3]);
       printf(" subnet=%d.%d.%d.%d\n",subnet[0],subnet[1],subnet[2],subnet[3]);
       printf(" gateway=%d.%d.%d.%d\n",gateway[0],gateway[1],gateway[2],gateway[3]);
-      printf(" mac=%02x:%02x:%02x:%02x:%02x:%02x\n",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+      printf(" mac=%02x:%02x:%02x:%02x:%02x:%02x\n",
+             mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
       printf(" udpaddr=%d.%d.%d.%d\n",udpaddr[0],udpaddr[1],udpaddr[2],udpaddr[3]);
       printf(" tcpaddr=%d.%d.%d.%d\n",tcpaddr[0],tcpaddr[1],tcpaddr[2],tcpaddr[3]);
       printf(" udpport=0x%08x  tcpport=0x%08x\n",udpport, tcpport);
 
-      /* Make the Connection - only for Client mode - to disable the cMSg connection data set lat arg 8->0*/
+      /* Make the Connection - only for Client mode - to disable the cMSg connection data set last arg 8->0 */
       vtpStreamingTcpConnect(inst, (netMode+1), emuData, 0);
-
-      /* Reset the TCP interface and listen for connection requests
-         In UDP mode this will just allow packets to be sent out */
       /* vtpStreamingTcpAccept(inst); */
     }
   }
@@ -475,6 +547,7 @@ rocPrestart()
 
   printf(" Done with User Prestart\n");
 }
+
 
 /**
                         PAUSE
@@ -709,3 +782,4 @@ rocReset()
   compile-command: "make -k vtp_list.so"
   End:
  */
+
