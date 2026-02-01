@@ -1,0 +1,51 @@
+FADC250_CRATE all
+FADC250_SLOT all
+
+#       channel:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+FADC250_ADC_MASK  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+FADC250_TRG_MASK  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+# force readout of channel mask (i.e. ignore threshold for readout)
+FADC250_TET_IGNORE_MASK 0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+#modes=1 (raw sample), 9 ( pulse integral + Hi-res time), 10 (pulse integer + Hi-res time + raw)
+FADC250_MODE 1
+
+# number of ns back from trigger point.
+FADC250_W_OFFSET  1200
+
+# number of ns to include in trigger window.
+FADC250_W_WIDTH  800
+
+# time (units: ns) before threshold crossing to include in integral
+FADC250_NSB 8 
+
+# time (units: ns) after threshold crossing to include in integral
+FADC250_NSA 60
+
+FADC250_NPEAK 1
+
+# fadc channel hit threshold (adc channel)
+FADC250_TET 20
+
+# board DAC, one and the same for all 16 channels (DAC/mV)
+FADC250_DAC 3270 
+
+# board Gains, same for all channels (MeV/channel)
+#FADC250_GAIN 0.500
+
+# Sparsification: 0=Bypassed (read all the channels for the detector), 1=Enabled (reads only the channels around the cluster)
+#FADC250_SPARSIFICATION 0
+
+# Accumulator scaler mode: 0=Default, TET based pulse integration, 1=Sum all samples
+#FADC250_ACCUMULATOR_SCALER_MODE_MASK 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+FADC250_CRATE end
+
+FADC250_CRATE test2
+FADC250_SLOT 3
+FADC250_ALLCH_PED  159.171  149.630  158.221  149.961  147.498  105.140  162.479  145.465  120.902  147.148  147.477  144.218  121.521  144.166  117.929  146.181
+FADC250_SLOT 4
+FADC250_ALLCH_PED  105.148  118.741  176.517  117.695  163.911  145.115  153.443  113.491  173.660  143.411  107.573  107.231  119.075  125.699   96.842  134.597
+FADC250_CRATE end
+
+
