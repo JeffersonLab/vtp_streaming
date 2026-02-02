@@ -297,7 +297,7 @@ static int generate_vtp_config(const char *config_dir, const char *rocname)
   }
 
   /* Write template content (based on vtp_rocname.cnf) */
-  fprintf(out_fp, "VTP_CRATE %svtpy\n", rocname);
+  fprintf(out_fp, "VTP_CRATE %svtp\n", rocname);
   fprintf(out_fp, "\n");
   fprintf(out_fp, "###################################################\n");
   fprintf(out_fp, "# Firmware Configuration\n");
