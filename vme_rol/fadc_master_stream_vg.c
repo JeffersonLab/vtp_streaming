@@ -272,16 +272,148 @@ static int generate_vme_config(const char *config_dir, const char *rocname, cons
 }
 
 /**
+ * Parse active FADC slots from peds file
+ * Reads all FADC250_SLOT entries and collects unique slot numbers
+ * Returns: number of active slots found, or -1 on error
+ */
+static int parse_active_fadc_slots(const char *peds_file, int *slots, int max_slots)
+{
+  FILE *fp;
+  char line[512];
+  char keyword[128];
+  int slot_num;
+  int num_slots = 0;
+  int i, already_exists;
+
+  if (!peds_file || !slots || max_slots <= 0) return -1;
+
+  fp = fopen(peds_file, "r");
+  if (!fp)
+  {
+    printf("ERROR: Cannot open peds file '%s' for parsing slots: %s\n", peds_file, strerror(errno));
+    return -1;
+  }
+
+  /* Read file line by line looking for FADC250_SLOT entries */
+  while (fgets(line, sizeof(line), fp) != NULL)
+  {
+    if (sscanf(line, "%127s %d", keyword, &slot_num) == 2)
+    {
+      if (strcmp(keyword, "FADC250_SLOT") == 0)
+      {
+        /* Check if this slot is already in our list */
+        already_exists = 0;
+        for (i = 0; i < num_slots; i++)
+        {
+          if (slots[i] == slot_num)
+          {
+            already_exists = 1;
+            break;
+          }
+        }
+
+        /* Add new slot if not already present and we have room */
+        if (!already_exists)
+        {
+          if (num_slots < max_slots)
+          {
+            slots[num_slots] = slot_num;
+            num_slots++;
+            printf("INFO: Found active FADC slot %d in peds file\n", slot_num);
+          }
+          else
+          {
+            printf("WARNING: Too many FADC slots found (max %d), ignoring slot %d\n", max_slots, slot_num);
+          }
+        }
+      }
+    }
+  }
+
+  fclose(fp);
+  return num_slots;
+}
+
+/**
+ * Map FADC slot number to VTP payload number using translation table
+ * Translation: slot -> payload
+ *   10->1, 13->2, 9->3, 14->4, 8->5, 15->6, 7->7, 16->8,
+ *   6->9, 17->10, 5->11, 18->12, 4->13, 19->14, 3->15, 20->16
+ * Returns: payload number (1-16) or -1 if slot not in table
+ */
+static int slot_to_payload(int slot)
+{
+  /* Translation table: index is payload-1, value is slot */
+  static const int payload_to_slot[16] = {
+    10, 13, 9, 14, 8, 15, 7, 16, 6, 17, 5, 18, 4, 19, 3, 20
+  };
+  int i;
+
+  /* Search for slot in table */
+  for (i = 0; i < 16; i++)
+  {
+    if (payload_to_slot[i] == slot)
+    {
+      return i + 1; /* Return payload number (1-based) */
+    }
+  }
+
+  return -1; /* Slot not found in translation table */
+}
+
+/**
  * Generate vtp_<rocname>.cnf configuration file
  * Follows template from vtp_rocname.cnf
+ * Derives VTP_PAYLOAD_EN from active FADC slots in peds.txt
  * Returns: 0 on success, -1 on failure
  */
-static int generate_vtp_config(const char *config_dir, const char *rocname)
+static int generate_vtp_config(const char *config_dir, const char *rocname, const char *peds_file)
 {
   char vtp_config_path[512];
   FILE *out_fp;
+  int active_slots[20];  /* Max 20 slots */
+  int num_active_slots;
+  int payload_enable[16]; /* 16 payloads */
+  int i, slot, payload;
 
-  if (!config_dir || !rocname) return -1;
+  if (!config_dir || !rocname || !peds_file) return -1;
+
+  /* Parse active FADC slots from peds file */
+  num_active_slots = parse_active_fadc_slots(peds_file, active_slots, 20);
+  if (num_active_slots < 0)
+  {
+    printf("ERROR: Failed to parse active FADC slots from peds file\n");
+    return -1;
+  }
+
+  /* Initialize payload enable array to all zeros */
+  for (i = 0; i < 16; i++)
+  {
+    payload_enable[i] = 0;
+  }
+
+  /* Map active slots to payloads */
+  for (i = 0; i < num_active_slots; i++)
+  {
+    slot = active_slots[i];
+    payload = slot_to_payload(slot);
+
+    if (payload > 0 && payload <= 16)
+    {
+      payload_enable[payload - 1] = 1;  /* payload is 1-based, array is 0-based */
+      printf("INFO: Mapped FADC slot %d to VTP payload %d (enabled)\n", slot, payload);
+    }
+    else
+    {
+      printf("WARNING: FADC slot %d not found in slot->payload translation table (ignored)\n", slot);
+    }
+  }
+
+  /* Warn if no active payloads */
+  if (num_active_slots == 0)
+  {
+    printf("WARNING: No active FADC slots found in peds file - all VTP payloads will be disabled\n");
+  }
 
   /* Build output path */
   snprintf(vtp_config_path, sizeof(vtp_config_path), "%s/vtp_%s.cnf", config_dir, rocname);
@@ -341,7 +473,12 @@ static int generate_vtp_config(const char *config_dir, const char *rocname)
   fprintf(out_fp, "\n");
   fprintf(out_fp, "#        slot: 10 13  9 14  8 15  7 16  6 17  5 18  4 19  3 20\n");
   fprintf(out_fp, "#     payload:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16\n");
-  fprintf(out_fp, "VTP_PAYLOAD_EN  0  0  0  0  0  0  0  0  0  0  0  0  1  0  1  0\n");
+  fprintf(out_fp, "VTP_PAYLOAD_EN");
+  for (i = 0; i < 16; i++)
+  {
+    fprintf(out_fp, "  %d", payload_enable[i]);
+  }
+  fprintf(out_fp, "\n");
   fprintf(out_fp, "\n");
   fprintf(out_fp, "VTP_STREAMING_ROCID       0\n");
   fprintf(out_fp, "VTP_STREAMING_NFRAME_BUF  1000\n");
@@ -516,7 +653,7 @@ rocDownload()
     }
 
     /* Generate vtp_<rocname>.cnf */
-    if (generate_vtp_config(coda_config_env, rocname) != 0)
+    if (generate_vtp_config(coda_config_env, rocname, peds_file) != 0)
     {
       printf("ERROR: rocDownload - Failed to generate VTP config file\n");
       printf("ERROR: rocDownload - DOWNLOAD TRANSITION FAILED\n");
