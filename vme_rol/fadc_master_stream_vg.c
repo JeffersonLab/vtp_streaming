@@ -31,17 +31,19 @@
 /* Measured longest fiber length in system */
 #define FIBER_LATENCY_OFFSET 0x4A
 
+/* Additional includes for pedestal generation and config file creation */
+#include <string.h>         /* strerror, strcmp, strlen */
+#include <errno.h>          /* errno */
+#include <unistd.h>         /* gethostname, access */
+#include <sys/utsname.h>    /* uname */
+#include <sys/wait.h>       /* waitpid */
+#include <ctype.h>          /* isalnum */
+
 #include "dmaBankTools.h"   /* Macros for handling CODA banks */
 #include "tiprimary_list.c" /* Source required for CODA readout lists using the TI */
 #include "fadcLib.h"        /* library of FADC250 routines */
 #include "sdLib.h"          /* VXS Signal Distribution board header */
 #include "fadc250Config.h"  /* Support for reading FADC config files */
-
-/* Additional includes for pedestal generation and config file creation */
-#include <unistd.h>         /* gethostname, access */
-#include <sys/utsname.h>    /* uname */
-#include <sys/wait.h>       /* waitpid */
-#include <ctype.h>          /* isalnum */
 
 /* Define initial blocklevel and buffering level */
 #define BLOCKLEVEL 1
@@ -382,6 +384,9 @@ rocDownload()
   unsigned short iflag;
   int ifa;
 
+  printf("***** rocDownload() ENTERED - START OF FUNCTION *****\n");
+  fflush(stdout);
+
   /* ===================================================================
    * PEDESTAL GENERATION AND CONFIG FILE CREATION
    * =================================================================== */
@@ -530,6 +535,9 @@ rocDownload()
   /* ===================================================================
    * END OF PEDESTAL GENERATION AND CONFIG FILE CREATION
    * =================================================================== */
+
+  printf("***** PEDESTAL GENERATION BLOCK COMPLETED - CONTINUING WITH FADC INIT *****\n");
+  fflush(stdout);
 
 
   /* Setup Address and data modes for DMA transfers
@@ -699,7 +707,8 @@ rocDownload()
 
   tiStatus(0);
 
-  printf("rocDownload: User Download Executed\n");
+  printf("***** rocDownload: User Download Executed *****\n");
+  fflush(stdout);
 
 }
 
