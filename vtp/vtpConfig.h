@@ -152,6 +152,7 @@ typedef struct {
     int net_mode;             /* Network mode: 0=TCP, 1=UDP */
     int enable_ejfat;         /* Enable EJFAT headers: 0=off, 1=on */
     int local_port;           /* Local port base (0-65535) */
+    int payload_en_array[16]; /* Payload enable array (payload 1-16): 0=disabled, 1=enabled */
   } streaming;
 
   struct
@@ -382,5 +383,6 @@ int vtpGetEnableEjfat(void);
 int vtpGetLocalPort(void);
 const char* vtpGetFirmwareZ7(void);
 const char* vtpGetFirmwareV7(void);
+const int* vtpGetPayloadEnableArray(void);
 
 #endif

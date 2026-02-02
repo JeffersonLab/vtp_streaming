@@ -37,6 +37,7 @@ extern int vtpGetEnableEjfat(void);
 extern int vtpGetLocalPort(void);
 extern const char* vtpGetFirmwareZ7(void);
 extern const char* vtpGetFirmwareV7(void);
+extern const int* vtpGetPayloadEnableArray(void);
 
 #define VTP_READ_CONF_FILE {				\
     vtpInitGlobals();					\

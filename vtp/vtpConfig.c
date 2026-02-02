@@ -500,6 +500,10 @@ vtpInitGlobals()
   vtpConf.streaming.net_mode = 1;       /* 1=UDP, 0=TCP */
   vtpConf.streaming.enable_ejfat = 1;
   vtpConf.streaming.local_port = 10001;
+  /* Initialize payload enable array (all disabled by default) */
+  for(i = 0; i < 16; i++) {
+    vtpConf.streaming.payload_en_array[i] = 0;
+  }
 }
 
 
@@ -770,6 +774,14 @@ vtpReadConfigFile(char *filename_in)
 		{
 		  GET_READ_MSK;
 		  vtpConf.payload_en = ui1;
+		  /* Also store as array for easier iteration in ROL code */
+		  for(jj = 0; jj < 16; jj++) {
+		    vtpConf.streaming.payload_en_array[jj] = msk[jj];
+		  }
+		  printf("VTP_PAYLOAD_EN parsed: bitmask=0x%04X, array=[", ui1);
+		  for(jj = 0; jj < 16; jj++) {
+		    printf("%d%s", vtpConf.streaming.payload_en_array[jj], (jj < 15) ? " " : "]\n");
+		  }
 		}
 	      else if(!strcmp(keyword,"VTP_FIBER_EN"))
 		{
@@ -3139,4 +3151,9 @@ const char* vtpGetFirmwareZ7(void)
 const char* vtpGetFirmwareV7(void)
 {
   return vtpConf.fw_filename_v7;
+}
+
+const int* vtpGetPayloadEnableArray(void)
+{
+  return vtpConf.streaming.payload_en_array;
 }

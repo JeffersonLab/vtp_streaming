@@ -427,23 +427,66 @@ rocPrestart()
   printf("EMU DEST from cfg/ROC: IP=0x%08x port=%d localport=%d\n",
          emuip, emuport, localport);
 
-  /* Configure all the payload ports - total of 8
-     pp_id, ppInfo, moduleID, lag, bank_tag, stream#
-     8 FADCs to Stream 1 */
-  //  vtpPayloadConfig(2,ppInfo,1,1,0,1);
-  //  vtpPayloadConfig(4,ppInfo,1,1,0,1);
-  //  vtpPayloadConfig(5,ppInfo,1,1,0,1);
-  //  vtpPayloadConfig(7,ppInfo,1,1,0,1);
-  //  vtpPayloadConfig(10,ppInfo,1,1,0,1);
-  //  vtpPayloadConfig(12,ppInfo,1,1,0,1);
+  /* ========================================================================
+   * DYNAMIC PAYLOAD CONFIGURATION
+   * ========================================================================
+   * Configure payload ports dynamically based on VTP_PAYLOAD_EN from config.
+   *
+   * CRITICAL: ppmask must represent ALL active payloads, not just the last one.
+   * We initialize ppmask=0 and then accumulate (|=) the mask for each active
+   * payload. This ensures the streaming EB knows about all configured payloads.
+   *
+   * If VTP_PAYLOAD_EN is missing or cannot be parsed, we fall back to no
+   * payloads enabled (safe default that prevents undefined behavior).
+   * ======================================================================== */
+  {
+    const int *payload_en = vtpGetPayloadEnableArray();
+    int payload_num;
+    int active_count = 0;
+    int mask_result;
 
-// DAQ testbed
-//  vtpPayloadConfig(6,ppInfo,1,1,0,1);
-//  ppmask = vtpPayloadConfig(8,ppInfo,1,1,0,1);
+    /* Initialize ppmask to 0 - CRITICAL: do not skip this! */
+    ppmask = 0;
 
-// Hall-B test2
-  vtpPayloadConfig(13,ppInfo,1,1,0,1);
-  ppmask = vtpPayloadConfig(15,ppInfo,1,1,0,1);
+    if (!payload_en) {
+      printf("ERROR: Unable to get payload enable array from config\n");
+      printf("ERROR: Falling back to no payloads enabled (ppmask=0)\n");
+    } else {
+      printf("INFO: Configuring VTP payload ports from VTP_PAYLOAD_EN...\n");
+
+      /* Iterate through all 16 possible payloads */
+      for (payload_num = 1; payload_num <= 16; payload_num++) {
+        /* Check if this payload is enabled (array index is payload_num-1) */
+        if (payload_en[payload_num - 1] == 1) {
+          printf("INFO:   Enabling payload %d (VTP_PAYLOAD_EN[%d]=1)\n",
+                 payload_num, payload_num - 1);
+
+          /* Configure this payload port */
+          mask_result = vtpPayloadConfig(payload_num, ppInfo, 1, 1, 0, 1);
+
+          /* CRITICAL: Accumulate mask using OR, not assignment */
+          ppmask |= mask_result;
+
+          active_count++;
+
+          /* Safety check: limit to 8 active payloads (hardware constraint) */
+          if (active_count > 8) {
+            printf("WARNING: More than 8 payloads are active (limit reached)\n");
+            printf("WARNING: Payload %d and higher will be ignored\n", payload_num);
+            break;
+          }
+        }
+      }
+
+      printf("INFO: Configured %d active payload port(s), ppmask=0x%04X\n",
+             active_count, ppmask);
+
+      if (active_count == 0) {
+        printf("WARNING: No payloads enabled in VTP_PAYLOAD_EN - check config file\n");
+      }
+    }
+  }
+  /* ======================================================================== */
 
   /* Update the Streaming EB configuration for the new firmware to get the correct PP Mask and ROCID
      PP mask, nstreams, frame_len (ns), ROCID, ppInfo  */
