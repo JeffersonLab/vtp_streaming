@@ -27,8 +27,10 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <time.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #undef USE_DMA
 #undef READOUT_TI
@@ -70,6 +72,81 @@ unsigned int emuData[] = {0x634d7367,0x20697320,0x636f6f6c,6,0,4196352,1,0};
 /*unsigned int emuData[] = {0x67734d63,0x20736920,0x6cf6f663,0x06000000,0,0x00084000,0x01000000,0x01000000};*/
 
 /* =========================[ ADDED: VTP helpers ]========================= */
+
+/**
+ * Get sanitized hostname for use in filenames
+ * Only allows [A-Za-z0-9._-], replaces others with '_'
+ * Returns: 0 on success, -1 on failure
+ */
+static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
+{
+  int i, rc;
+  struct utsname uts_info;
+
+  if (!hostname_buf || bufsize == 0) return -1;
+
+  /* Try gethostname first */
+  rc = gethostname(hostname_buf, bufsize);
+  if (rc != 0 || hostname_buf[0] == '\0')
+  {
+    /* Fallback to uname */
+    if (uname(&uts_info) == 0)
+    {
+      strncpy(hostname_buf, uts_info.nodename, bufsize - 1);
+      hostname_buf[bufsize - 1] = '\0';
+    }
+    else
+    {
+      printf("ERROR: Failed to determine hostname (gethostname and uname both failed)\n");
+      return -1;
+    }
+  }
+
+  /* Sanitize hostname: only allow [A-Za-z0-9._-] */
+  for (i = 0; hostname_buf[i] != '\0'; i++)
+  {
+    if (!isalnum(hostname_buf[i]) && hostname_buf[i] != '.' &&
+        hostname_buf[i] != '_' && hostname_buf[i] != '-')
+    {
+      hostname_buf[i] = '_';
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Construct path to generated VTP config file
+ * Uses $CODA_CONFIG/vtp_<hostname>.cnf (assuming rocname = hostname)
+ * Returns: 0 on success, -1 on failure
+ */
+static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
+{
+  char hostname[256];
+  const char *coda_config;
+
+  if (!path_buf || bufsize == 0) return -1;
+
+  /* Get CODA_CONFIG directory */
+  coda_config = getenv("CODA_CONFIG");
+  if (!coda_config || !*coda_config)
+  {
+    printf("ERROR: CODA_CONFIG environment variable not set\n");
+    return -1;
+  }
+
+  /* Get sanitized hostname */
+  if (vtp_get_sanitized_hostname(hostname, sizeof(hostname)) != 0)
+  {
+    printf("ERROR: Failed to get hostname for VTP config path\n");
+    return -1;
+  }
+
+  /* Construct path: $CODA_CONFIG/vtp_<hostname>.cnf */
+  snprintf(path_buf, bufsize, "%s/vtp_%s.cnf", coda_config, hostname);
+
+  return 0;
+}
 
 /* Helper to get source ID (use ROCID as fallback) */
 static int vtp_get_src_id(uint32_t *out)
@@ -398,16 +475,54 @@ rocPrestart()
 
   printf("Calling VTP_READ_CONF_FILE ..\n");fflush(stdout);
 
-  printf("%s: rol->usrConfig = %s\n", __func__, rol->usrConfig);
-
   /* Read Config file and Initialize VTP variables */
-  vtpInitGlobals();
-  if(rol->usrConfig)
-    vtpConfig(rol->usrConfig);
+  /* Use GENERATED VTP config file from $CODA_CONFIG, not rol->usrConfig */
+  {
+    char vtp_config_path[512];
 
-  /* Try to get DESTIP/DESTIPPORT from VTP config file */
-  if (rol->usrConfig)
-    vtp_read_dest_from_cfg(rol->usrConfig, &emuip, &emuport);
+    if (vtp_get_generated_config_path(vtp_config_path, sizeof(vtp_config_path)) == 0)
+    {
+      printf("INFO: Using GENERATED VTP config file: %s\n", vtp_config_path);
+
+      /* Verify file exists before trying to read it */
+      if (access(vtp_config_path, R_OK) == 0)
+      {
+        vtpInitGlobals();
+        vtpConfig(vtp_config_path);
+
+        /* Try to get DESTIP/DESTIPPORT from VTP config file */
+        vtp_read_dest_from_cfg(vtp_config_path, &emuip, &emuport);
+      }
+      else
+      {
+        printf("WARNING: Generated VTP config file '%s' not found or not readable\n", vtp_config_path);
+        printf("WARNING: Falling back to user config from rol->usrConfig\n");
+
+        /* Fallback to user config if generated file doesn't exist */
+        printf("%s: Fallback - rol->usrConfig = %s\n", __func__, rol->usrConfig);
+        vtpInitGlobals();
+        if(rol->usrConfig)
+        {
+          vtpConfig(rol->usrConfig);
+          vtp_read_dest_from_cfg(rol->usrConfig, &emuip, &emuport);
+        }
+      }
+    }
+    else
+    {
+      printf("ERROR: Failed to construct generated VTP config path\n");
+      printf("ERROR: Falling back to user config from rol->usrConfig\n");
+
+      /* Fallback to user config if path construction fails */
+      printf("%s: Fallback - rol->usrConfig = %s\n", __func__, rol->usrConfig);
+      vtpInitGlobals();
+      if(rol->usrConfig)
+      {
+        vtpConfig(rol->usrConfig);
+        vtp_read_dest_from_cfg(rol->usrConfig, &emuip, &emuport);
+      }
+    }
+  }
 
   /* Fallback to CODA ROC link info if config did not set them */
   if (emuip == 0 || emuport == 0)

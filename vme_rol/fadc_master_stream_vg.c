@@ -75,6 +75,342 @@ unsigned int fadcmask=0;
 unsigned int MAXFADCWORDS=0;
 
 /****************************************
+ * USER CONFIG PARSING AND FILE GENERATION
+ ****************************************/
+
+/**
+ * Structure to hold all parameters parsed from user configuration file.
+ * This includes both VME/FADC parameters and VTP streaming parameters.
+ */
+typedef struct {
+  /* VME/FADC parameters */
+  int fadc_mode;
+  int fadc_w_offset;
+  int fadc_w_width;
+  int fadc_nsb;
+  int fadc_nsa;
+  int fadc_npeak;
+  int fadc_tet;
+  int fadc_dac;
+  int fadc_adc_mask[16];
+  int fadc_trg_mask[16];
+  int fadc_tet_ignore_mask[16];
+
+  /* VTP streaming parameters */
+  int vtp_streaming_rocid;
+  int vtp_streaming_nframe_buf;
+  int vtp_streaming_framelen;
+  int vtp_streaming;
+  unsigned char vtp_streaming_mac[6];
+  int vtp_streaming_nstreams;
+  unsigned char vtp_streaming_ipaddr[4];
+  unsigned char vtp_streaming_subnet[4];
+  unsigned char vtp_streaming_gateway[4];
+  char vtp_streaming_destip[64];
+  int vtp_streaming_destipport;
+  int vtp_streaming_localport;
+  int vtp_streaming_connect;
+
+  /* Validation flags */
+  int have_vtp_rocid;
+  int have_vtp_nframe_buf;
+  int have_vtp_framelen;
+  int have_vtp_streaming;
+  int have_vtp_mac;
+  int have_vtp_nstreams;
+  int have_vtp_ipaddr;
+  int have_vtp_subnet;
+  int have_vtp_gateway;
+  int have_vtp_destip;
+  int have_vtp_destipport;
+  int have_vtp_localport;
+  int have_vtp_connect;
+} user_config_params_t;
+
+/**
+ * Initialize config parameters to defaults
+ */
+static void init_config_params(user_config_params_t *params)
+{
+  int i;
+  if (!params) return;
+
+  memset(params, 0, sizeof(user_config_params_t));
+
+  /* Set default VME/FADC parameters */
+  params->fadc_mode = 1;
+  params->fadc_w_offset = 1200;
+  params->fadc_w_width = 800;
+  params->fadc_nsb = 8;
+  params->fadc_nsa = 60;
+  params->fadc_npeak = 1;
+  params->fadc_tet = 20;
+  params->fadc_dac = 3270;
+
+  for (i = 0; i < 16; i++) {
+    params->fadc_adc_mask[i] = 1;
+    params->fadc_trg_mask[i] = 0;
+    params->fadc_tet_ignore_mask[i] = 0;
+  }
+
+  /* VTP parameters - no defaults, must be specified in config */
+}
+
+/**
+ * Parse user configuration file to extract both VME and VTP parameters.
+ * Returns: 0 on success, -1 on failure
+ */
+static int parse_user_config(const char *config_file, user_config_params_t *params)
+{
+  FILE *fp;
+  char line[1024];
+  char keyword[256];
+  int line_num = 0;
+
+  if (!config_file || !params) {
+    printf("ERROR: parse_user_config - invalid arguments\n");
+    return -1;
+  }
+
+  printf("INFO: Parsing user config file: %s\n", config_file);
+
+  fp = fopen(config_file, "r");
+  if (!fp) {
+    printf("ERROR: Cannot open user config file '%s': %s\n", config_file, strerror(errno));
+    return -1;
+  }
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    line_num++;
+
+    /* Skip comments and blank lines */
+    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+
+    /* Parse keyword */
+    if (sscanf(line, "%255s", keyword) != 1) continue;
+
+    /* VME/FADC parameters */
+    if (strcmp(keyword, "FADC250_MODE") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_mode);
+      printf("INFO:   FADC250_MODE = %d\n", params->fadc_mode);
+    }
+    else if (strcmp(keyword, "FADC250_W_OFFSET") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_w_offset);
+      printf("INFO:   FADC250_W_OFFSET = %d\n", params->fadc_w_offset);
+    }
+    else if (strcmp(keyword, "FADC250_W_WIDTH") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_w_width);
+      printf("INFO:   FADC250_W_WIDTH = %d\n", params->fadc_w_width);
+    }
+    else if (strcmp(keyword, "FADC250_NSB") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_nsb);
+      printf("INFO:   FADC250_NSB = %d\n", params->fadc_nsb);
+    }
+    else if (strcmp(keyword, "FADC250_NSA") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_nsa);
+      printf("INFO:   FADC250_NSA = %d\n", params->fadc_nsa);
+    }
+    else if (strcmp(keyword, "FADC250_NPEAK") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_npeak);
+      printf("INFO:   FADC250_NPEAK = %d\n", params->fadc_npeak);
+    }
+    else if (strcmp(keyword, "FADC250_TET") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_tet);
+      printf("INFO:   FADC250_TET = %d\n", params->fadc_tet);
+    }
+    else if (strcmp(keyword, "FADC250_DAC") == 0) {
+      sscanf(line, "%*s %d", &params->fadc_dac);
+      printf("INFO:   FADC250_DAC = %d\n", params->fadc_dac);
+    }
+    else if (strcmp(keyword, "FADC250_ADC_MASK") == 0) {
+      sscanf(line, "%*s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+             &params->fadc_adc_mask[0], &params->fadc_adc_mask[1],
+             &params->fadc_adc_mask[2], &params->fadc_adc_mask[3],
+             &params->fadc_adc_mask[4], &params->fadc_adc_mask[5],
+             &params->fadc_adc_mask[6], &params->fadc_adc_mask[7],
+             &params->fadc_adc_mask[8], &params->fadc_adc_mask[9],
+             &params->fadc_adc_mask[10], &params->fadc_adc_mask[11],
+             &params->fadc_adc_mask[12], &params->fadc_adc_mask[13],
+             &params->fadc_adc_mask[14], &params->fadc_adc_mask[15]);
+    }
+    else if (strcmp(keyword, "FADC250_TRG_MASK") == 0) {
+      sscanf(line, "%*s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+             &params->fadc_trg_mask[0], &params->fadc_trg_mask[1],
+             &params->fadc_trg_mask[2], &params->fadc_trg_mask[3],
+             &params->fadc_trg_mask[4], &params->fadc_trg_mask[5],
+             &params->fadc_trg_mask[6], &params->fadc_trg_mask[7],
+             &params->fadc_trg_mask[8], &params->fadc_trg_mask[9],
+             &params->fadc_trg_mask[10], &params->fadc_trg_mask[11],
+             &params->fadc_trg_mask[12], &params->fadc_trg_mask[13],
+             &params->fadc_trg_mask[14], &params->fadc_trg_mask[15]);
+    }
+    else if (strcmp(keyword, "FADC250_TET_IGNORE_MASK") == 0) {
+      sscanf(line, "%*s %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+             &params->fadc_tet_ignore_mask[0], &params->fadc_tet_ignore_mask[1],
+             &params->fadc_tet_ignore_mask[2], &params->fadc_tet_ignore_mask[3],
+             &params->fadc_tet_ignore_mask[4], &params->fadc_tet_ignore_mask[5],
+             &params->fadc_tet_ignore_mask[6], &params->fadc_tet_ignore_mask[7],
+             &params->fadc_tet_ignore_mask[8], &params->fadc_tet_ignore_mask[9],
+             &params->fadc_tet_ignore_mask[10], &params->fadc_tet_ignore_mask[11],
+             &params->fadc_tet_ignore_mask[12], &params->fadc_tet_ignore_mask[13],
+             &params->fadc_tet_ignore_mask[14], &params->fadc_tet_ignore_mask[15]);
+    }
+    /* VTP streaming parameters */
+    else if (strcmp(keyword, "VTP_STREAMING_ROCID") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_rocid);
+      params->have_vtp_rocid = 1;
+      printf("INFO:   VTP_STREAMING_ROCID = %d\n", params->vtp_streaming_rocid);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_NFRAME_BUF") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_nframe_buf);
+      params->have_vtp_nframe_buf = 1;
+      printf("INFO:   VTP_STREAMING_NFRAME_BUF = %d\n", params->vtp_streaming_nframe_buf);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_FRAMELEN") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_framelen);
+      params->have_vtp_framelen = 1;
+      printf("INFO:   VTP_STREAMING_FRAMELEN = %d\n", params->vtp_streaming_framelen);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming);
+      params->have_vtp_streaming = 1;
+      printf("INFO:   VTP_STREAMING = %d\n", params->vtp_streaming);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_MAC") == 0) {
+      unsigned int mac[6];
+      sscanf(line, "%*s %x %x %x %x %x %x",
+             &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+      params->vtp_streaming_mac[0] = mac[0];
+      params->vtp_streaming_mac[1] = mac[1];
+      params->vtp_streaming_mac[2] = mac[2];
+      params->vtp_streaming_mac[3] = mac[3];
+      params->vtp_streaming_mac[4] = mac[4];
+      params->vtp_streaming_mac[5] = mac[5];
+      params->have_vtp_mac = 1;
+      printf("INFO:   VTP_STREAMING_MAC = %02X:%02X:%02X:%02X:%02X:%02X\n",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_NSTREAMS") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_nstreams);
+      params->have_vtp_nstreams = 1;
+      printf("INFO:   VTP_STREAMING_NSTREAMS = %d\n", params->vtp_streaming_nstreams);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_IPADDR") == 0) {
+      unsigned int ip[4];
+      sscanf(line, "%*s %u %u %u %u", &ip[0], &ip[1], &ip[2], &ip[3]);
+      params->vtp_streaming_ipaddr[0] = ip[0];
+      params->vtp_streaming_ipaddr[1] = ip[1];
+      params->vtp_streaming_ipaddr[2] = ip[2];
+      params->vtp_streaming_ipaddr[3] = ip[3];
+      params->have_vtp_ipaddr = 1;
+      printf("INFO:   VTP_STREAMING_IPADDR = %d.%d.%d.%d\n",
+             ip[0], ip[1], ip[2], ip[3]);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_SUBNET") == 0) {
+      unsigned int subnet[4];
+      sscanf(line, "%*s %u %u %u %u", &subnet[0], &subnet[1], &subnet[2], &subnet[3]);
+      params->vtp_streaming_subnet[0] = subnet[0];
+      params->vtp_streaming_subnet[1] = subnet[1];
+      params->vtp_streaming_subnet[2] = subnet[2];
+      params->vtp_streaming_subnet[3] = subnet[3];
+      params->have_vtp_subnet = 1;
+      printf("INFO:   VTP_STREAMING_SUBNET = %d.%d.%d.%d\n",
+             subnet[0], subnet[1], subnet[2], subnet[3]);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_GATEWAY") == 0) {
+      unsigned int gateway[4];
+      sscanf(line, "%*s %u %u %u %u", &gateway[0], &gateway[1], &gateway[2], &gateway[3]);
+      params->vtp_streaming_gateway[0] = gateway[0];
+      params->vtp_streaming_gateway[1] = gateway[1];
+      params->vtp_streaming_gateway[2] = gateway[2];
+      params->vtp_streaming_gateway[3] = gateway[3];
+      params->have_vtp_gateway = 1;
+      printf("INFO:   VTP_STREAMING_GATEWAY = %d.%d.%d.%d\n",
+             gateway[0], gateway[1], gateway[2], gateway[3]);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_DESTIP") == 0) {
+      sscanf(line, "%*s %63s", params->vtp_streaming_destip);
+      params->have_vtp_destip = 1;
+      printf("INFO:   VTP_STREAMING_DESTIP = %s\n", params->vtp_streaming_destip);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_DESTIPPORT") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_destipport);
+      params->have_vtp_destipport = 1;
+      printf("INFO:   VTP_STREAMING_DESTIPPORT = %d\n", params->vtp_streaming_destipport);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_LOCALPORT") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_localport);
+      params->have_vtp_localport = 1;
+      printf("INFO:   VTP_STREAMING_LOCALPORT = %d\n", params->vtp_streaming_localport);
+    }
+    else if (strcmp(keyword, "VTP_STREAMING_CONNECT") == 0) {
+      sscanf(line, "%*s %d", &params->vtp_streaming_connect);
+      params->have_vtp_connect = 1;
+      printf("INFO:   VTP_STREAMING_CONNECT = %d\n", params->vtp_streaming_connect);
+    }
+  }
+
+  fclose(fp);
+
+  /* Validate required VTP parameters */
+  if (!params->have_vtp_rocid) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_ROCID\n");
+    return -1;
+  }
+  if (!params->have_vtp_nframe_buf) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_NFRAME_BUF\n");
+    return -1;
+  }
+  if (!params->have_vtp_framelen) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_FRAMELEN\n");
+    return -1;
+  }
+  if (!params->have_vtp_streaming) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING\n");
+    return -1;
+  }
+  if (!params->have_vtp_mac) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_MAC\n");
+    return -1;
+  }
+  if (!params->have_vtp_nstreams) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_NSTREAMS\n");
+    return -1;
+  }
+  if (!params->have_vtp_ipaddr) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_IPADDR\n");
+    return -1;
+  }
+  if (!params->have_vtp_subnet) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_SUBNET\n");
+    return -1;
+  }
+  if (!params->have_vtp_gateway) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_GATEWAY\n");
+    return -1;
+  }
+  if (!params->have_vtp_destip) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_DESTIP\n");
+    return -1;
+  }
+  if (!params->have_vtp_destipport) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_DESTIPPORT\n");
+    return -1;
+  }
+  if (!params->have_vtp_localport) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_LOCALPORT\n");
+    return -1;
+  }
+  if (!params->have_vtp_connect) {
+    printf("ERROR: Missing required parameter: VTP_STREAMING_CONNECT\n");
+    return -1;
+  }
+
+  printf("INFO: User config parsing completed successfully\n");
+  return 0;
+}
+
+/****************************************
  * HELPER FUNCTIONS FOR PEDESTAL GENERATION
  ****************************************/
 
@@ -178,22 +514,25 @@ static int parse_rocname_from_peds(const char *peds_file, char *rocname_buf, siz
 
 /**
  * Generate vme_<rocname>.cnf configuration file
- * Follows template from vme_rocname.cnf and appends peds.txt content
+ * Uses parsed user config parameters and appends peds.txt content
  * Returns: 0 on success, -1 on failure
  */
-static int generate_vme_config(const char *config_dir, const char *rocname, const char *peds_file)
+static int generate_vme_config(const char *config_dir, const char *rocname,
+                                 const char *peds_file, const user_config_params_t *params)
 {
   char vme_config_path[512];
   FILE *out_fp, *peds_fp;
   char line[1024];
   int line_count = 0;
+  int i;
 
-  if (!config_dir || !rocname || !peds_file) return -1;
+  if (!config_dir || !rocname || !peds_file || !params) return -1;
 
   /* Build output path */
   snprintf(vme_config_path, sizeof(vme_config_path), "%s/vme_%s.cnf", config_dir, rocname);
 
   printf("INFO: Generating VME config file: %s\n", vme_config_path);
+  printf("INFO: Using parameters from user config\n");
 
   /* Open output file */
   out_fp = fopen(vme_config_path, "w");
@@ -203,46 +542,74 @@ static int generate_vme_config(const char *config_dir, const char *rocname, cons
     return -1;
   }
 
-  /* Write template header (based on vme_rocname.cnf) */
+  /* Write header using parsed parameters */
   fprintf(out_fp, "FADC250_CRATE all\n");
   fprintf(out_fp, "FADC250_SLOT all\n");
   fprintf(out_fp, "\n");
   fprintf(out_fp, "#       channel:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15\n");
-  fprintf(out_fp, "FADC250_ADC_MASK  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1\n");
-  fprintf(out_fp, "FADC250_TRG_MASK  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0\n");
+
+  /* Write ADC mask from parsed config */
+  fprintf(out_fp, "FADC250_ADC_MASK");
+  for (i = 0; i < 16; i++) {
+    fprintf(out_fp, "  %d", params->fadc_adc_mask[i]);
+  }
   fprintf(out_fp, "\n");
+
+  /* Write TRG mask from parsed config */
+  fprintf(out_fp, "FADC250_TRG_MASK");
+  for (i = 0; i < 16; i++) {
+    fprintf(out_fp, "  %d", params->fadc_trg_mask[i]);
+  }
+  fprintf(out_fp, "\n");
+  fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# force readout of channel mask (i.e. ignore threshold for readout)\n");
-  fprintf(out_fp, "FADC250_TET_IGNORE_MASK 0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0\n");
+  fprintf(out_fp, "FADC250_TET_IGNORE_MASK");
+  for (i = 0; i < 16; i++) {
+    fprintf(out_fp, " %d", params->fadc_tet_ignore_mask[i]);
+  }
   fprintf(out_fp, "\n");
+  fprintf(out_fp, "\n");
+
   fprintf(out_fp, "#modes=1 (raw sample), 9 ( pulse integral + Hi-res time), 10 (pulse integer + Hi-res time + raw)\n");
-  fprintf(out_fp, "FADC250_MODE 1\n");
+  fprintf(out_fp, "FADC250_MODE %d\n", params->fadc_mode);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# number of ns back from trigger point.\n");
-  fprintf(out_fp, "FADC250_W_OFFSET  1200\n");
+  fprintf(out_fp, "FADC250_W_OFFSET  %d\n", params->fadc_w_offset);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# number of ns to include in trigger window.\n");
-  fprintf(out_fp, "FADC250_W_WIDTH  800\n");
+  fprintf(out_fp, "FADC250_W_WIDTH  %d\n", params->fadc_w_width);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# time (units: ns) before threshold crossing to include in integral\n");
-  fprintf(out_fp, "FADC250_NSB 8 \n");
+  fprintf(out_fp, "FADC250_NSB %d \n", params->fadc_nsb);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# time (units: ns) after threshold crossing to include in integral\n");
-  fprintf(out_fp, "FADC250_NSA 60\n");
+  fprintf(out_fp, "FADC250_NSA %d\n", params->fadc_nsa);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "FADC250_NPEAK 1\n");
+
+  fprintf(out_fp, "FADC250_NPEAK %d\n", params->fadc_npeak);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# fadc channel hit threshold (adc channel)\n");
-  fprintf(out_fp, "FADC250_TET 20\n");
+  fprintf(out_fp, "FADC250_TET %d\n", params->fadc_tet);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# board DAC, one and the same for all 16 channels (DAC/mV)\n");
-  fprintf(out_fp, "FADC250_DAC 3270 \n");
+  fprintf(out_fp, "FADC250_DAC %d \n", params->fadc_dac);
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# board Gains, same for all channels (MeV/channel)\n");
   fprintf(out_fp, "#FADC250_GAIN 0.500\n");
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# Sparsification: 0=Bypassed (read all the channels for the detector), 1=Enabled (reads only the channels around the cluster)\n");
   fprintf(out_fp, "#FADC250_SPARSIFICATION 0\n");
   fprintf(out_fp, "\n");
+
   fprintf(out_fp, "# Accumulator scaler mode: 0=Default, TET based pulse integration, 1=Sum all samples\n");
   fprintf(out_fp, "#FADC250_ACCUMULATOR_SCALER_MODE_MASK 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
   fprintf(out_fp, "FADC250_CRATE end\n");
@@ -363,11 +730,12 @@ static int slot_to_payload(int slot)
 
 /**
  * Generate vtp_<rocname>.cnf configuration file
- * Follows template from vtp_rocname.cnf
+ * Uses parsed user config parameters for VTP settings
  * Derives VTP_PAYLOAD_EN from active FADC slots in peds.txt
  * Returns: 0 on success, -1 on failure
  */
-static int generate_vtp_config(const char *config_dir, const char *rocname, const char *peds_file)
+static int generate_vtp_config(const char *config_dir, const char *rocname,
+                                 const char *peds_file, const user_config_params_t *params)
 {
   char vtp_config_path[512];
   FILE *out_fp;
@@ -480,28 +848,39 @@ static int generate_vtp_config(const char *config_dir, const char *rocname, cons
   }
   fprintf(out_fp, "\n");
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_ROCID       0\n");
-  fprintf(out_fp, "VTP_STREAMING_NFRAME_BUF  1000\n");
-  fprintf(out_fp, "VTP_STREAMING_FRAMELEN    65536\n");
+  /* Use parsed VTP parameters from user config */
+  printf("INFO: Using VTP parameters from user config\n");
+  fprintf(out_fp, "VTP_STREAMING_ROCID       %d\n", params->vtp_streaming_rocid);
+  fprintf(out_fp, "VTP_STREAMING_NFRAME_BUF  %d\n", params->vtp_streaming_nframe_buf);
+  fprintf(out_fp, "VTP_STREAMING_FRAMELEN    %d\n", params->vtp_streaming_framelen);
   fprintf(out_fp, "\n");
   fprintf(out_fp, "###################################################\n");
   fprintf(out_fp, "#VTP FADC Streaming event builder #0 (slots 3-10) #\n");
   fprintf(out_fp, "###################################################\n");
-  fprintf(out_fp, "VTP_STREAMING             0\n");
+  fprintf(out_fp, "VTP_STREAMING             %d\n", params->vtp_streaming);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_MAC         0xCE 0xBA 0xF0 0x03 0x00 0x9d\n");
+  fprintf(out_fp, "VTP_STREAMING_MAC         0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
+          params->vtp_streaming_mac[0], params->vtp_streaming_mac[1],
+          params->vtp_streaming_mac[2], params->vtp_streaming_mac[3],
+          params->vtp_streaming_mac[4], params->vtp_streaming_mac[5]);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_NSTREAMS    1\n");
+  fprintf(out_fp, "VTP_STREAMING_NSTREAMS    %d\n", params->vtp_streaming_nstreams);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_IPADDR      129  57 69 14\n");
-  fprintf(out_fp, "VTP_STREAMING_SUBNET      255 255 255   0\n");
-  fprintf(out_fp, "VTP_STREAMING_GATEWAY     129  57 69   1   \n");
+  fprintf(out_fp, "VTP_STREAMING_IPADDR      %d  %d %d %d\n",
+          params->vtp_streaming_ipaddr[0], params->vtp_streaming_ipaddr[1],
+          params->vtp_streaming_ipaddr[2], params->vtp_streaming_ipaddr[3]);
+  fprintf(out_fp, "VTP_STREAMING_SUBNET      %d %d %d   %d\n",
+          params->vtp_streaming_subnet[0], params->vtp_streaming_subnet[1],
+          params->vtp_streaming_subnet[2], params->vtp_streaming_subnet[3]);
+  fprintf(out_fp, "VTP_STREAMING_GATEWAY     %d  %d  %d   %d   \n",
+          params->vtp_streaming_gateway[0], params->vtp_streaming_gateway[1],
+          params->vtp_streaming_gateway[2], params->vtp_streaming_gateway[3]);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_DESTIP      129.57.177.3\n");
-  fprintf(out_fp, "VTP_STREAMING_DESTIPPORT  19522\n");
-  fprintf(out_fp, "VTP_STREAMING_LOCALPORT   10001\n");
+  fprintf(out_fp, "VTP_STREAMING_DESTIP      %s\n", params->vtp_streaming_destip);
+  fprintf(out_fp, "VTP_STREAMING_DESTIPPORT  %d\n", params->vtp_streaming_destipport);
+  fprintf(out_fp, "VTP_STREAMING_LOCALPORT   %d\n", params->vtp_streaming_localport);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_CONNECT     1\n");
+  fprintf(out_fp, "VTP_STREAMING_CONNECT     %d\n", params->vtp_streaming_connect);
   fprintf(out_fp, "\n");
 
   fclose(out_fp);
@@ -520,12 +899,13 @@ rocDownload()
   unsigned int ival = SYNC_INTERVAL;
   unsigned short iflag;
   int ifa;
+  char generated_vme_config[512];  /* Path to generated VME config file */
 
   printf("***** rocDownload() ENTERED - START OF FUNCTION *****\n");
   fflush(stdout);
 
   /* ===================================================================
-   * PEDESTAL GENERATION AND CONFIG FILE CREATION
+   * USER CONFIG PARSING, PEDESTAL GENERATION, AND CONFIG FILE CREATION
    * =================================================================== */
   {
     char hostname[256];
@@ -535,6 +915,32 @@ rocDownload()
     const char *coda_env, *coda_data_env, *coda_config_env;
     pid_t pid;
     int status;
+    user_config_params_t config_params;
+
+    printf("INFO: ============================================\n");
+    printf("INFO: PHASE 1: Parse user configuration\n");
+    printf("INFO: ============================================\n");
+
+    /* Initialize config parameters */
+    init_config_params(&config_params);
+
+    /* Parse user configuration file */
+    if (!rol->usrConfig || !*rol->usrConfig) {
+      printf("ERROR: rocDownload - User config file (rol->usrConfig) not set\n");
+      printf("ERROR: rocDownload - DOWNLOAD TRANSITION FAILED\n");
+      return;
+    }
+
+    printf("INFO: Parsing user config file: %s\n", rol->usrConfig);
+    if (parse_user_config(rol->usrConfig, &config_params) != 0) {
+      printf("ERROR: rocDownload - Failed to parse user config file\n");
+      printf("ERROR: rocDownload - DOWNLOAD TRANSITION FAILED\n");
+      return;
+    }
+
+    printf("INFO: ============================================\n");
+    printf("INFO: PHASE 2: Generate pedestals\n");
+    printf("INFO: ============================================\n");
 
     /* Get hostname */
     if (get_sanitized_hostname(hostname, sizeof(hostname)) != 0)
@@ -636,6 +1042,10 @@ rocDownload()
       return;
     }
 
+    printf("INFO: ============================================\n");
+    printf("INFO: PHASE 3: Generate configuration files\n");
+    printf("INFO: ============================================\n");
+
     /* Parse rocname from peds file */
     if (parse_rocname_from_peds(peds_file, rocname, sizeof(rocname)) != 0)
     {
@@ -644,16 +1054,16 @@ rocDownload()
       return;
     }
 
-    /* Generate vme_<rocname>.cnf */
-    if (generate_vme_config(coda_config_env, rocname, peds_file) != 0)
+    /* Generate vme_<rocname>.cnf using parsed parameters */
+    if (generate_vme_config(coda_config_env, rocname, peds_file, &config_params) != 0)
     {
       printf("ERROR: rocDownload - Failed to generate VME config file\n");
       printf("ERROR: rocDownload - DOWNLOAD TRANSITION FAILED\n");
       return;
     }
 
-    /* Generate vtp_<rocname>.cnf */
-    if (generate_vtp_config(coda_config_env, rocname, peds_file) != 0)
+    /* Generate vtp_<rocname>.cnf using parsed parameters */
+    if (generate_vtp_config(coda_config_env, rocname, peds_file, &config_params) != 0)
     {
       printf("ERROR: rocDownload - Failed to generate VTP config file\n");
       printf("ERROR: rocDownload - DOWNLOAD TRANSITION FAILED\n");
@@ -661,13 +1071,18 @@ rocDownload()
     }
 
     printf("INFO: ============================================\n");
-    printf("INFO: Pedestal generation and config creation complete\n");
+    printf("INFO: Config file generation complete\n");
+    printf("INFO:   User config (input):  %s\n", rol->usrConfig);
     printf("INFO:   Hostname: %s\n", hostname);
     printf("INFO:   ROC name: %s\n", rocname);
     printf("INFO:   Peds file: %s\n", peds_file);
-    printf("INFO:   VME config: %s/vme_%s.cnf\n", coda_config_env, rocname);
-    printf("INFO:   VTP config: %s/vtp_%s.cnf\n", coda_config_env, rocname);
+    printf("INFO:   VME config (generated): %s/vme_%s.cnf\n", coda_config_env, rocname);
+    printf("INFO:   VTP config (generated): %s/vtp_%s.cnf\n", coda_config_env, rocname);
     printf("INFO: ============================================\n");
+
+    /* Store generated VME config path for use in FADC configuration below */
+    snprintf(generated_vme_config, sizeof(generated_vme_config),
+             "%s/vme_%s.cnf", coda_config_env, rocname);
   }
   /* ===================================================================
    * END OF PEDESTAL GENERATION AND CONFIG FILE CREATION
@@ -766,13 +1181,16 @@ rocDownload()
   }
 
 #ifdef FADC_USE_CONFIG_FILE
-  /* Read in a FADC250 Config file */
-  stat = fadc250Config(rol->usrConfig);
-  //stat = fadc250Config("/polaris/home/tpex/desy/fadc250/tpex_0.cnf");
+  /* Read in the GENERATED FADC250 Config file (NOT rol->usrConfig) */
+  printf("INFO: ============================================\n");
+  printf("INFO: PHASE 4: Configure FADC using generated VME config\n");
+  printf("INFO: ============================================\n");
+  printf("INFO: Using generated VME config file: %s\n", generated_vme_config);
+  stat = fadc250Config(generated_vme_config);
   if(stat<0) {
-    printf("ERROR: Reading FADC250 Config file FAILED\n");
+    printf("ERROR: Reading FADC250 Config file '%s' FAILED\n", generated_vme_config);
   }else{
-    printf("INFO: Read in FADC250 Config file\n");  
+    printf("INFO: Successfully loaded FADC250 Config from generated file\n");
   }
 
   /* Enable Bus Error and SyncReset for readout */

@@ -1,0 +1,80 @@
+############################################
+######## VME Configuration #################
+############################################
+
+FADC250_CRATE all
+FADC250_SLOT all
+
+#       channel:  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+FADC250_ADC_MASK  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+FADC250_TRG_MASK  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+# force readout of channel mask (i.e. ignore threshold for readout)
+FADC250_TET_IGNORE_MASK 0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+#modes=1 (raw sample), 9 ( pulse integral + Hi-res time), 10 (pulse integer + Hi-res time + raw)
+FADC250_MODE 1
+
+# number of ns back from trigger point.
+FADC250_W_OFFSET  1200
+
+# number of ns to include in trigger window.
+FADC250_W_WIDTH  800
+
+# time (units: ns) before threshold crossing to include in integral
+FADC250_NSB 8 
+
+# time (units: ns) after threshold crossing to include in integral
+FADC250_NSA 60
+
+FADC250_NPEAK 1
+
+# fadc channel hit threshold (adc channel)
+FADC250_TET 20
+
+# board DAC, one and the same for all 16 channels (DAC/mV)
+FADC250_DAC 3270 
+
+# board Gains, same for all channels (MeV/channel)
+#FADC250_GAIN 0.500
+
+# Sparsification: 0=Bypassed (read all the channels for the detector), 1=Enabled (reads only the channels around the cluster)
+#FADC250_SPARSIFICATION 0
+
+# Accumulator scaler mode: 0=Default, TET based pulse integration, 1=Sum all samples
+#FADC250_ACCUMULATOR_SCALER_MODE_MASK 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+############################################
+######## VTP Configuration #################
+############################################
+
+# Streaming V2 firmware
+#VTP_FIRMWARE_Z7           fe_vtp_z7_streamingv3_Mar02.bin
+#VTP_FIRMWARE_V7           fe_vtp_v7_fadc_streamingv3_Mar15.2.bin
+
+
+VTP_STREAMING_ROCID       0
+VTP_STREAMING_NFRAME_BUF  1000
+VTP_STREAMING_FRAMELEN    65536
+
+###################################################
+#VTP FADC Streaming event builder #0 (slots 3-10) #
+###################################################
+VTP_STREAMING             0
+
+VTP_STREAMING_MAC         0xCE 0xBA 0xF0 0x03 0x00 0x9d
+
+VTP_STREAMING_NSTREAMS    1
+
+VTP_STREAMING_IPADDR      129  57  69 14    # NOTE: This must be substituted with the IP of the <roname>-s1.jlab.org
+VTP_STREAMING_SUBNET      255 255 255   0
+VTP_STREAMING_GATEWAY     129  57  69   1   
+
+
+VTP_STREAMING_DESTIP	         129.57.177.25
+
+VTP_STREAMING_DESTIPPORT  19522
+VTP_STREAMING_LOCALPORT   10001
+
+VTP_STREAMING_CONNECT     1
+
