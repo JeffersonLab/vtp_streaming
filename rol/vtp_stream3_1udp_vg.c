@@ -74,8 +74,11 @@ unsigned int emuData[] = {0x634d7367,0x20697320,0x636f6f6c,6,0,4196352,1,0};
 /* =========================[ ADDED: VTP helpers ]========================= */
 
 /**
- * Get sanitized hostname for use in filenames
- * Only allows [A-Za-z0-9._-], replaces others with '_'
+ * Get short, sanitized hostname for use in filenames.
+ * Strips the domain portion (everything from the first dot onward) so that
+ * "test2.jlab.org" becomes "test2", matching the ROC name used when the
+ * config files are generated.
+ * Only allows [A-Za-z0-9_-] in the result; other characters become '_'.
  * Returns: 0 on success, -1 on failure
  */
 static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
@@ -102,11 +105,21 @@ static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
     }
   }
 
-  /* Sanitize hostname: only allow [A-Za-z0-9._-] */
+  /* Strip domain: keep only the short hostname (everything before the first dot).
+   * gethostname() may return an FQDN (e.g. "test2.jlab.org") but the generated
+   * config files use only the short ROC name ("test2").  When no dot is present
+   * the string is already a short name and nothing is changed. */
+  {
+    char *dot = strchr(hostname_buf, '.');
+    if (dot)
+      *dot = '\0';
+  }
+
+  /* Sanitize hostname: only allow [A-Za-z0-9_-] */
   for (i = 0; hostname_buf[i] != '\0'; i++)
   {
-    if (!isalnum(hostname_buf[i]) && hostname_buf[i] != '.' &&
-        hostname_buf[i] != '_' && hostname_buf[i] != '-')
+    if (!isalnum(hostname_buf[i]) && hostname_buf[i] != '_' &&
+        hostname_buf[i] != '-')
     {
       hostname_buf[i] = '_';
     }
