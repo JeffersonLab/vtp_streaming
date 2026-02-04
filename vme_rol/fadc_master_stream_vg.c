@@ -784,7 +784,7 @@ static int generate_vtp_config(const char *config_dir, const char *rocname,
   }
 
   /* Build output path */
-  snprintf(vtp_config_path, sizeof(vtp_config_path), "%s/vtp_%s.cnf", config_dir, rocname);
+  snprintf(vtp_config_path, sizeof(vtp_config_path), "%s/vtp_%svtp.cnf", config_dir, rocname);
 
   printf("INFO: Generating VTP config file: %s\n", vtp_config_path);
 
@@ -1077,7 +1077,7 @@ rocDownload()
     printf("INFO:   ROC name: %s\n", rocname);
     printf("INFO:   Peds file: %s\n", peds_file);
     printf("INFO:   VME config (generated): %s/vme_%s.cnf\n", coda_config_env, rocname);
-    printf("INFO:   VTP config (generated): %s/vtp_%s.cnf\n", coda_config_env, rocname);
+    printf("INFO:   VTP config (generated): %s/vtp_%svtp.cnf\n", coda_config_env, rocname);
     printf("INFO: ============================================\n");
 
     /* Store generated VME config path for use in FADC configuration below */
