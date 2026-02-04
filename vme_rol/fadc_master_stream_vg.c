@@ -889,6 +889,37 @@ static int generate_vtp_config(const char *config_dir, const char *rocname,
   return 0;
 }
 
+/**
+ * Strip a trailing "vtp" suffix from rocname if present.
+ * Writes the result into out (up to outsize bytes including NUL).
+ * If rocname does not end with "vtp", or is shorter than 3 chars,
+ * out is a straight copy of rocname.
+ */
+static void strip_trailing_vtp(const char *rocname, char *out, size_t outsize)
+{
+  size_t len;
+
+  if (!rocname || !out || outsize == 0) return;
+
+  len = strlen(rocname);
+
+  /* Copy the full string first */
+  strncpy(out, rocname, outsize - 1);
+  out[outsize - 1] = '\0';
+
+  /* Strip trailing "vtp" only if the name is longer than 3 chars
+   * (we don't want to produce an empty string) */
+  if (len > 3)
+  {
+    if (rocname[len - 3] == 'v' &&
+        rocname[len - 2] == 't' &&
+        rocname[len - 1] == 'p')
+    {
+      out[len - 3] = '\0';
+    }
+  }
+}
+
 /****************************************
  *  DOWNLOAD
  ****************************************/
@@ -900,6 +931,7 @@ rocDownload()
   unsigned short iflag;
   int ifa;
   char generated_vme_config[512];  /* Path to generated VME config file */
+  char generated_vtp_config[512];  /* Path to generated VTP config file (for reading) */
 
   printf("***** rocDownload() ENTERED - START OF FUNCTION *****\n");
   fflush(stdout);
@@ -1083,6 +1115,17 @@ rocDownload()
     /* Store generated VME config path for use in FADC configuration below */
     snprintf(generated_vme_config, sizeof(generated_vme_config),
              "%s/vme_%s.cnf", coda_config_env, rocname);
+
+    /* Store VTP config READ path: strip trailing "vtp" from rocname so that
+     * the path resolves to vtp_<base>.cnf regardless of whether rocname
+     * already carries the suffix. */
+    {
+      char rocname_base[256];
+      strip_trailing_vtp(rocname, rocname_base, sizeof(rocname_base));
+      snprintf(generated_vtp_config, sizeof(generated_vtp_config),
+               "%s/vtp_%s.cnf", coda_config_env, rocname_base);
+      printf("INFO:   VTP config (read):      %s\n", generated_vtp_config);
+    }
   }
   /* ===================================================================
    * END OF PEDESTAL GENERATION AND CONFIG FILE CREATION
