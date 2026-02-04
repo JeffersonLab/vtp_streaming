@@ -731,7 +731,7 @@ static int slot_to_payload(int slot)
 }
 
 /**
- * Generate vtp_<rocname>vtp.cnf configuration file
+ * Generate vtp_<rocname>.cnf configuration file
  * Uses parsed user config parameters for VTP settings
  * Derives VTP_PAYLOAD_EN from active FADC slots in peds.txt
  * Returns: 0 on success, -1 on failure
@@ -786,7 +786,7 @@ static int generate_vtp_config(const char *config_dir, const char *rocname,
   }
 
   /* Build output path */
-  snprintf(vtp_config_path, sizeof(vtp_config_path), "%s/vtp_%svtp.cnf", config_dir, rocname);
+  snprintf(vtp_config_path, sizeof(vtp_config_path), "%s/vtp_%s.cnf", config_dir, rocname);
 
   printf("INFO: Generating VTP config file: %s\n", vtp_config_path);
 
@@ -798,7 +798,7 @@ static int generate_vtp_config(const char *config_dir, const char *rocname,
     return -1;
   }
 
-  /* Write template content (based on vtp_rocnamevtp.cnf) */
+  /* Write template content (based on vtp_rocname.cnf) */
   fprintf(out_fp, "VTP_CRATE %svtp\n", rocname);
   fprintf(out_fp, "\n");
   fprintf(out_fp, "###################################################\n");
@@ -1096,7 +1096,7 @@ rocDownload()
       return;
     }
 
-    /* Generate vtp_<rocname>vtp.cnf using parsed parameters */
+    /* Generate vtp_<rocname>.cnf using parsed parameters */
     if (generate_vtp_config(coda_config_env, rocname, peds_file, &config_params) != 0)
     {
       printf("ERROR: rocDownload - Failed to generate VTP config file\n");
@@ -1111,7 +1111,7 @@ rocDownload()
     printf("INFO:   ROC name: %s\n", rocname);
     printf("INFO:   Peds file: %s\n", peds_file);
     printf("INFO:   VME config (generated): %s/vme_%s.cnf\n", coda_config_env, rocname);
-    printf("INFO:   VTP config (generated): %s/vtp_%svtp.cnf\n", coda_config_env, rocname);
+    printf("INFO:   VTP config (generated): %s/vtp_%s.cnf\n", coda_config_env, rocname);
     printf("INFO: ============================================\n");
 
     /* Store generated VME config path for use in FADC configuration below */

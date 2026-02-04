@@ -180,7 +180,7 @@ static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
 
 /**
  * Construct path to generated VTP config file
- * Uses $CODA_CONFIG/vtp_<hostname>vtp.cnf (assuming rocname = hostname)
+ * Uses $CODA_CONFIG/vtp_<hostname>.cnf (assuming rocname = hostname)
  * Returns: 0 on success, -1 on failure
  */
 static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
@@ -218,8 +218,8 @@ static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
     char hostname_base[256];
     strip_trailing_vtp(hostname, hostname_base, sizeof(hostname_base));
 
-    /* Construct path: $CODA_CONFIG/vtp_<base>vtp.cnf */
-    snprintf(path_buf, bufsize, "%s/vtp_%svtp.cnf", coda_config, hostname_base);
+    /* Construct path: $CODA_CONFIG/vtp_<base>.cnf */
+    snprintf(path_buf, bufsize, "%s/vtp_%s.cnf", coda_config, hostname_base);
   }
 
   return 0;

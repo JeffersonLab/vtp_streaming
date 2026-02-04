@@ -21,7 +21,7 @@ Generate pedestals (fadc250peds)
     ↓
 Generate runtime configs:
   - vme_<rocname>.cnf (VME/FADC settings + pedestals)
-  - vtp_<rocname>vtp.cnf (VTP streaming settings + dynamic payload enable)
+  - vtp_<rocname>.cnf (VTP streaming settings + dynamic payload enable)
     ↓
 Use generated configs for runtime configuration
 ```
@@ -35,7 +35,7 @@ ROC (e.g. `test2`).
 | File | Pattern | Example |
 |------|---------|---------|
 | VME / FADC config | `vme_<rocname>.cnf` | `vme_test2.cnf` |
-| VTP config | `vtp_<rocname>vtp.cnf` | `vtp_test2vtp.cnf` |
+| VTP config | `vtp_<rocname>.cnf` | `vtp_test2.cnf` |
 
 Both files are written into the directory given by `$CODA_CONFIG`.
 
@@ -71,7 +71,7 @@ will find the file the producer created.
 
 **3. Generated Files for Runtime**
 - FADC configured using generated `$CODA_CONFIG/vme_<rocname>.cnf`
-- VTP configured using generated `$CODA_CONFIG/vtp_<rocname>vtp.cnf`
+- VTP configured using generated `$CODA_CONFIG/vtp_<rocname>.cnf`
 - User config is input only; runtime uses generated files
 
 **4. Dynamic Payload Configuration**
@@ -89,7 +89,7 @@ will find the file the producer created.
 ### Configuration
 - `config/userConfig.txt` - User-defined configuration (VME + VTP parameters)
 - `$CODA_CONFIG/vme_<rocname>.cnf` - Generated FADC config (runtime)
-- `$CODA_CONFIG/vtp_<rocname>vtp.cnf` - Generated VTP config (runtime)
+- `$CODA_CONFIG/vtp_<rocname>.cnf` - Generated VTP config (runtime)
 - `$CODA_DATA/<hostname>_peds.txt` - Generated pedestals
 
 ### Readout Lists
@@ -136,7 +136,7 @@ cd ../rol && make vtp_stream3_1udp_vg.so
 Point CODA run control to your user config file. During download transition:
 1. System parses user config and validates parameters
 2. Executes `fadc250peds` to generate pedestals
-3. Creates `vme_<rocname>.cnf` and `vtp_<rocname>vtp.cnf` in `$CODA_CONFIG`
+3. Creates `vme_<rocname>.cnf` and `vtp_<rocname>.cnf` in `$CODA_CONFIG`
 4. FADC and VTP configured using generated files
 
 ## Key Features
