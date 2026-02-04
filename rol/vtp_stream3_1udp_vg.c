@@ -186,7 +186,7 @@ static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
   }
 
   /* Construct path: $CODA_CONFIG/vtp_<hostname>.cnf */
-  snprintf(path_buf, bufsize, "%s/vtp_%s.cnf", coda_config, hostname);
+  snprintf(path_buf, bufsize, "%s/vtp_%svtp.cnf", coda_config, hostname);
 
   return 0;
 }
