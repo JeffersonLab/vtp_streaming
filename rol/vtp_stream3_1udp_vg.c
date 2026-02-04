@@ -525,23 +525,6 @@ rocPrestart()
 
     if (vtp_get_generated_config_path(vtp_config_path, sizeof(vtp_config_path)) == 0)
     {
-      /* Debug: print path with length and non-printable bytes escaped as \xNN
-       * so that any invisible whitespace (e.g. \n from gethostname or
-       * CODA_CONFIG) is immediately visible in the log.  Remove once verified. */
-      {
-        size_t _pi, _plen = strlen(vtp_config_path);
-        printf("INFO: VTP config path [%zu]: '", _plen);
-        for (_pi = 0; _pi < _plen; _pi++)
-        {
-          unsigned char _ch = (unsigned char)vtp_config_path[_pi];
-          if (_ch >= 0x20 && _ch < 0x7f)
-            putchar(_ch);
-          else
-            printf("\\x%02x", _ch);
-        }
-        printf("'\n");
-      }
-
       /* Verify file exists before trying to read it */
       if (access(vtp_config_path, R_OK) == 0)
       {
