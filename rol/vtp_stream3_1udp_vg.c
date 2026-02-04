@@ -93,6 +93,32 @@ static void trim_trailing_ws(char *s)
 }
 
 /**
+ * Strip a trailing "vtp" suffix from src if present.
+ * Copies src into dst (up to dstsize bytes including NUL) and, when the
+ * result is longer than 3 characters and ends with "vtp", removes those
+ * three bytes.  A name that is exactly "vtp" is left untouched so the
+ * output is never empty.
+ */
+static void strip_trailing_vtp(const char *src, char *dst, size_t dstsize)
+{
+  size_t len;
+
+  if (!src || !dst || dstsize == 0) return;
+
+  strncpy(dst, src, dstsize - 1);
+  dst[dstsize - 1] = '\0';
+  len = strlen(dst);
+
+  if (len > 3 &&
+      dst[len - 3] == 'v' &&
+      dst[len - 2] == 't' &&
+      dst[len - 1] == 'p')
+  {
+    dst[len - 3] = '\0';
+  }
+}
+
+/**
  * Get short, sanitized hostname for use in filenames.
  * Strips the domain portion (everything from the first dot onward) so that
  * "test2.jlab.org" becomes "test2", matching the ROC name used when the
@@ -185,8 +211,16 @@ static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
     return -1;
   }
 
-  /* Construct path: $CODA_CONFIG/vtp_<hostname>vtp.cnf */
-  snprintf(path_buf, bufsize, "%s/vtp_%svtp.cnf", coda_config, hostname);
+  /* Strip trailing "vtp" from hostname so that names like "test2vtp"
+   * reduce to "test2" before we append the suffix in the format string.
+   * If hostname has no such suffix it is unchanged. */
+  {
+    char hostname_base[256];
+    strip_trailing_vtp(hostname, hostname_base, sizeof(hostname_base));
+
+    /* Construct path: $CODA_CONFIG/vtp_<base>vtp.cnf */
+    snprintf(path_buf, bufsize, "%s/vtp_%svtp.cnf", coda_config, hostname_base);
+  }
 
   return 0;
 }
