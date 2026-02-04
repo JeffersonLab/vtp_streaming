@@ -26,6 +26,37 @@ Generate runtime configs:
 Use generated configs for runtime configuration
 ```
 
+### Generated File Naming Convention
+
+Two runtime configuration files are created during the download transition.
+Their names are built from `<rocname>`, which is the short hostname of the
+ROC (e.g. `test2`).
+
+| File | Pattern | Example |
+|------|---------|---------|
+| VME / FADC config | `vme_<rocname>.cnf` | `vme_test2.cnf` |
+| VTP config | `vtp_<rocname>vtp.cnf` | `vtp_test2vtp.cnf` |
+
+Both files are written into the directory given by `$CODA_CONFIG`.
+
+**How `<rocname>` is determined — producer vs consumer:**
+
+- **Producer** (`fadc_master_stream_vg.c`): reads `<rocname>` from the first
+  line of the pedestals file (`$CODA_DATA/<hostname>_peds.txt`).  That line
+  has the format `FADC250_CRATE <rocname>`, where `<rocname>` is the short
+  hostname written by `fadc250peds`.
+
+- **Consumer** (`vtp_stream3_1udp_vg.c`): derives the same value
+  independently at runtime by calling `gethostname()` and then
+  (1) stripping any trailing whitespace/newlines,
+  (2) removing the domain suffix (everything from the first `.` onward), and
+  (3) replacing any remaining non-alphanumeric characters (other than `_`
+  and `-`) with `_`.
+
+The two sides must agree.  As long as the short hostname reported by the
+kernel matches the `FADC250_CRATE` value in the pedestals file, the consumer
+will find the file the producer created.
+
 ### Key Design Choices
 
 **1. Parse Before Generate**
