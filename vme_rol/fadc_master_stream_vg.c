@@ -45,6 +45,8 @@
 #include "sdLib.h"          /* VXS Signal Distribution board header */
 #include "fadc250Config.h"  /* Support for reading FADC config files */
 
+extern int vtpConfig(char *fname);  /* VTP config-file parser (vtpConfig.c / libvtp) */
+
 /* Define initial blocklevel and buffering level */
 #define BLOCKLEVEL 1
 #define BUFFERLEVEL 1
@@ -1295,6 +1297,17 @@ rocDownload()
     }
 #endif
 
+  /* Read in the generated VTP config file */
+  printf("INFO: ============================================\n");
+  printf("INFO: PHASE 5: Configure VTP using generated config\n");
+  printf("INFO: ============================================\n");
+  printf("INFO: Using generated VTP config file: %s\n", generated_vtp_config);
+  stat = vtpConfig(generated_vtp_config);
+  if(stat < 0) {
+    printf("ERROR: Reading VTP Config file '%s' FAILED\n", generated_vtp_config);
+  } else {
+    printf("INFO: Successfully loaded VTP Config from generated file\n");
+  }
 
   /* Print status for FADCS*/
 #ifndef FADC_VXS
