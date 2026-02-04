@@ -74,6 +74,25 @@ unsigned int emuData[] = {0x634d7367,0x20697320,0x636f6f6c,6,0,4196352,1,0};
 /* =========================[ ADDED: VTP helpers ]========================= */
 
 /**
+ * Strip trailing whitespace (\n \r \t space) from a C string in place.
+ * gethostname() and getenv() can return strings with trailing newlines on
+ * certain systems; this must be called before any of that data is used in
+ * a file path.
+ */
+static void trim_trailing_ws(char *s)
+{
+  int end = (int)strlen(s);
+  while (end > 0)
+  {
+    unsigned char c = (unsigned char)s[end - 1];
+    if (c == '\n' || c == '\r' || c == '\t' || c == ' ')
+      s[--end] = '\0';
+    else
+      break;
+  }
+}
+
+/**
  * Get short, sanitized hostname for use in filenames.
  * Strips the domain portion (everything from the first dot onward) so that
  * "test2.jlab.org" becomes "test2", matching the ROC name used when the
@@ -104,6 +123,11 @@ static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
       return -1;
     }
   }
+
+  /* Remove any trailing whitespace/newlines left by gethostname or uname.
+   * Must happen before the domain strip: a trailing \n would otherwise
+   * survive past the dot-search and reach the filename. */
+  trim_trailing_ws(hostname_buf);
 
   /* Strip domain: keep only the short hostname (everything before the first dot).
    * gethostname() may return an FQDN (e.g. "test2.jlab.org") but the generated
@@ -136,19 +160,25 @@ static int vtp_get_sanitized_hostname(char *hostname_buf, size_t bufsize)
 static int vtp_get_generated_config_path(char *path_buf, size_t bufsize)
 {
   char hostname[256];
-  const char *coda_config;
+  char coda_config[512];          /* mutable copy — must trim before use */
+  const char *coda_config_raw;
 
   if (!path_buf || bufsize == 0) return -1;
 
-  /* Get CODA_CONFIG directory */
-  coda_config = getenv("CODA_CONFIG");
-  if (!coda_config || !*coda_config)
+  /* Get CODA_CONFIG directory and trim trailing whitespace.
+   * The value is set externally by the CODA run-control framework; on some
+   * systems or shell configurations it may carry a trailing newline. */
+  coda_config_raw = getenv("CODA_CONFIG");
+  if (!coda_config_raw || !*coda_config_raw)
   {
     printf("ERROR: CODA_CONFIG environment variable not set\n");
     return -1;
   }
+  strncpy(coda_config, coda_config_raw, sizeof(coda_config) - 1);
+  coda_config[sizeof(coda_config) - 1] = '\0';
+  trim_trailing_ws(coda_config);
 
-  /* Get sanitized hostname */
+  /* Get sanitized (trimmed + domain-stripped) hostname */
   if (vtp_get_sanitized_hostname(hostname, sizeof(hostname)) != 0)
   {
     printf("ERROR: Failed to get hostname for VTP config path\n");
@@ -495,7 +525,22 @@ rocPrestart()
 
     if (vtp_get_generated_config_path(vtp_config_path, sizeof(vtp_config_path)) == 0)
     {
-      printf("INFO: Using GENERATED VTP config file: %s\n", vtp_config_path);
+      /* Debug: print path with length and non-printable bytes escaped as \xNN
+       * so that any invisible whitespace (e.g. \n from gethostname or
+       * CODA_CONFIG) is immediately visible in the log.  Remove once verified. */
+      {
+        size_t _pi, _plen = strlen(vtp_config_path);
+        printf("INFO: VTP config path [%zu]: '", _plen);
+        for (_pi = 0; _pi < _plen; _pi++)
+        {
+          unsigned char _ch = (unsigned char)vtp_config_path[_pi];
+          if (_ch >= 0x20 && _ch < 0x7f)
+            putchar(_ch);
+          else
+            printf("\\x%02x", _ch);
+        }
+        printf("'\n");
+      }
 
       /* Verify file exists before trying to read it */
       if (access(vtp_config_path, R_OK) == 0)
