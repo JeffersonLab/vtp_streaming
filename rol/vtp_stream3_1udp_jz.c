@@ -636,30 +636,49 @@ rocPrestart()
   printf("Calling VTP_READ_CONF_FILE ..\n");fflush(stdout);
 
   /* Read Config file and Initialize VTP variables */
-  /* ONLY use auto-generated VTP config file: vtp_<rocname>.cnf from $CODA_CONFIG */
-  /* NO fallback to rol->usrConfig - this is a FATAL error if file is missing */
+  /* Prefer rol->usrConfig when set; otherwise fall back to auto-generated
+   * vtp_<rocname>.cnf from $CODA_CONFIG. */
   {
     char vtp_config_path[512];
+    int have_usr_config = 0;
 
-    if (vtp_get_generated_config_path(vtp_config_path, sizeof(vtp_config_path)) != 0)
+    if (rol->usrConfig && *rol->usrConfig)
     {
-      printf("ERROR: Failed to construct generated VTP config path\n");
-      printf("ERROR: Cannot determine vtp_<rocname>.cnf location\n");
-      printf("ERROR: Check that CODA_CONFIG environment variable is set\n");
-      return;
+      strncpy(vtp_config_path, rol->usrConfig, sizeof(vtp_config_path) - 1);
+      vtp_config_path[sizeof(vtp_config_path) - 1] = '\0';
+      have_usr_config = 1;
+    }
+    else
+    {
+      if (vtp_get_generated_config_path(vtp_config_path, sizeof(vtp_config_path)) != 0)
+      {
+        printf("ERROR: Failed to construct generated VTP config path\n");
+        printf("ERROR: Cannot determine vtp_<rocname>.cnf location\n");
+        printf("ERROR: Check that CODA_CONFIG environment variable is set\n");
+        return;
+      }
     }
 
     /* Verify file exists and is readable */
     if (access(vtp_config_path, R_OK) != 0)
     {
-      printf("ERROR: Generated VTP config file '%s' not found or not readable\n", vtp_config_path);
+      if (have_usr_config)
+      {
+        printf("ERROR: rol->usrConfig file '%s' not found or not readable\n", vtp_config_path);
+      }
+      else
+      {
+        printf("ERROR: Generated VTP config file '%s' not found or not readable\n", vtp_config_path);
+        printf("ERROR: Expected location: $CODA_CONFIG/vtp_<rocname>.cnf\n");
+      }
       printf("ERROR: This file MUST exist for VTP operation\n");
-      printf("ERROR: Expected location: $CODA_CONFIG/vtp_<rocname>.cnf\n");
-      printf("ERROR: No fallback to rol->usrConfig - fix your config generation\n");
       return;
     }
 
-    printf("Using auto-generated VTP config: %s\n", vtp_config_path);
+    if (have_usr_config)
+      printf("Using rol->usrConfig VTP config: %s\n", vtp_config_path);
+    else
+      printf("Using auto-generated VTP config: %s\n", vtp_config_path);
 
     /* Load the config file */
     vtpInitGlobals();
@@ -1181,4 +1200,3 @@ rocReset()
   compile-command: "make -k vtp_list.so"
   End:
  */
-

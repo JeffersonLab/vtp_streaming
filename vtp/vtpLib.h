@@ -341,7 +341,7 @@ typedef struct V7Mig_Struct
 #define VTP_STREB_ASYNC_FIFO_EN   0x40
 #define VTP_STREB_CMSG_HDR_EN     0x08
 #define VTP_STREB_EJFAT_EN        0x100
-#define VTP_STREB_ENABLE_MASK     0xFFFFFF37
+#define VTP_STREB_ENABLE_MASK     0xFFFFFE37
 #define VTP_STREB_AFIFO_MASK      0x30
 #define VTP_STREB_STREAM_MASK     0x07
 
