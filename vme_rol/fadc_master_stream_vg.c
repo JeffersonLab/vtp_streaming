@@ -279,18 +279,40 @@ static int parse_user_config(const char *config_file, user_config_params_t *para
       printf("INFO:   VTP_STREAMING = %d\n", params->vtp_streaming);
     }
     else if (strcmp(keyword, "VTP_STREAMING_MAC") == 0) {
-      unsigned int mac[6];
-      sscanf(line, "%*s %x %x %x %x %x %x",
-             &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-      params->vtp_streaming_mac[0] = mac[0];
-      params->vtp_streaming_mac[1] = mac[1];
-      params->vtp_streaming_mac[2] = mac[2];
-      params->vtp_streaming_mac[3] = mac[3];
-      params->vtp_streaming_mac[4] = mac[4];
-      params->vtp_streaming_mac[5] = mac[5];
+      char mac_token[64];
+      if (sscanf(line, "%*s %63s", mac_token) == 1 && strchr(mac_token, ':')) {
+        /* Colon-separated format: CE:BA:F0:03:01:23 */
+        if (parse_mac_string(mac_token, params->vtp_streaming_mac) != 0) {
+          printf("ERROR: Malformed VTP_STREAMING_MAC (expected XX:XX:XX:XX:XX:XX): '%s'\n",
+                 mac_token);
+          fclose(fp);
+          return -1;
+        }
+      } else {
+        /* Space-separated hex format: 0xCE 0xBA 0xF0 0x03 0x01 0x23 */
+        unsigned int mac[6];
+        int i;
+        if (sscanf(line, "%*s %x %x %x %x %x %x",
+                   &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+          printf("ERROR: Malformed VTP_STREAMING_MAC"
+                 " (expected 6 hex bytes or XX:XX:XX:XX:XX:XX): '%s'\n", line);
+          fclose(fp);
+          return -1;
+        }
+        for (i = 0; i < 6; i++) {
+          if (mac[i] > 255) {
+            printf("ERROR: VTP_STREAMING_MAC byte %d out of range: %u\n", i, mac[i]);
+            fclose(fp);
+            return -1;
+          }
+          params->vtp_streaming_mac[i] = (unsigned char)mac[i];
+        }
+      }
       params->have_vtp_mac = 1;
       printf("INFO:   VTP_STREAMING_MAC = %02X:%02X:%02X:%02X:%02X:%02X\n",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+             params->vtp_streaming_mac[0], params->vtp_streaming_mac[1],
+             params->vtp_streaming_mac[2], params->vtp_streaming_mac[3],
+             params->vtp_streaming_mac[4], params->vtp_streaming_mac[5]);
     }
     else if (strcmp(keyword, "VTP_STREAMING_NSTREAMS") == 0) {
       sscanf(line, "%*s %d", &params->vtp_streaming_nstreams);
@@ -298,15 +320,38 @@ static int parse_user_config(const char *config_file, user_config_params_t *para
       printf("INFO:   VTP_STREAMING_NSTREAMS = %d\n", params->vtp_streaming_nstreams);
     }
     else if (strcmp(keyword, "VTP_STREAMING_IPADDR") == 0) {
-      unsigned int ip[4];
-      sscanf(line, "%*s %u %u %u %u", &ip[0], &ip[1], &ip[2], &ip[3]);
-      params->vtp_streaming_ipaddr[0] = ip[0];
-      params->vtp_streaming_ipaddr[1] = ip[1];
-      params->vtp_streaming_ipaddr[2] = ip[2];
-      params->vtp_streaming_ipaddr[3] = ip[3];
+      char ip_token[64];
+      if (sscanf(line, "%*s %63s", ip_token) == 1 && strchr(ip_token, '.')) {
+        /* Dotted-decimal format: 129.57.69.58 */
+        if (parse_ip_string(ip_token, params->vtp_streaming_ipaddr) != 0) {
+          printf("ERROR: Malformed VTP_STREAMING_IPADDR (expected d.d.d.d): '%s'\n",
+                 ip_token);
+          fclose(fp);
+          return -1;
+        }
+      } else {
+        /* Space-separated decimal format: 129 57 69 58 */
+        unsigned int ip[4];
+        int i;
+        if (sscanf(line, "%*s %u %u %u %u", &ip[0], &ip[1], &ip[2], &ip[3]) != 4) {
+          printf("ERROR: Malformed VTP_STREAMING_IPADDR"
+                 " (expected 4 decimal bytes or d.d.d.d): '%s'\n", line);
+          fclose(fp);
+          return -1;
+        }
+        for (i = 0; i < 4; i++) {
+          if (ip[i] > 255) {
+            printf("ERROR: VTP_STREAMING_IPADDR octet %d out of range: %u\n", i, ip[i]);
+            fclose(fp);
+            return -1;
+          }
+          params->vtp_streaming_ipaddr[i] = (unsigned char)ip[i];
+        }
+      }
       params->have_vtp_ipaddr = 1;
       printf("INFO:   VTP_STREAMING_IPADDR = %d.%d.%d.%d\n",
-             ip[0], ip[1], ip[2], ip[3]);
+             params->vtp_streaming_ipaddr[0], params->vtp_streaming_ipaddr[1],
+             params->vtp_streaming_ipaddr[2], params->vtp_streaming_ipaddr[3]);
     }
     else if (strcmp(keyword, "VTP_STREAMING_SUBNET") == 0) {
       unsigned int subnet[4];
@@ -1038,7 +1083,7 @@ static int generate_vtp_config(const char *config_dir, const char *rocname,
   fprintf(out_fp, "\n");
   fprintf(out_fp, "VTP_STREAMING_NSTREAMS    %d\n", params->vtp_streaming_nstreams);
   fprintf(out_fp, "\n");
-  fprintf(out_fp, "VTP_STREAMING_IPADDR      %d  %d %d %d\n",
+  fprintf(out_fp, "VTP_STREAMING_IPADDR      %d %d %d %d\n",
           params->vtp_streaming_ipaddr[0], params->vtp_streaming_ipaddr[1],
           params->vtp_streaming_ipaddr[2], params->vtp_streaming_ipaddr[3]);
   fprintf(out_fp, "VTP_STREAMING_SUBNET      %d %d %d   %d\n",
