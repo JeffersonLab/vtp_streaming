@@ -354,6 +354,38 @@ static int parse_user_config(const char *config_file, user_config_params_t *para
 
   fclose(fp);
 
+  /* Hostname-based node-table lookup: find the row that matches this machine
+   * and override VTP_STREAMING_MAC and VTP_STREAMING_IPADDR automatically. */
+  {
+    char local_hostname[256];
+    unsigned char tbl_mac[6], tbl_ip[4];
+    int rc;
+
+    if (get_sanitized_hostname(local_hostname, sizeof(local_hostname)) == 0) {
+      rc = lookup_node_mac_ip(config_file, local_hostname, tbl_mac, tbl_ip);
+      if (rc == 0) {
+        /* Match found - override whatever was set by explicit config keys */
+        memcpy(params->vtp_streaming_mac,    tbl_mac, 6);
+        memcpy(params->vtp_streaming_ipaddr, tbl_ip,  4);
+        params->have_vtp_mac    = 1;
+        params->have_vtp_ipaddr = 1;
+        printf("INFO: VTP_STREAMING_MAC and VTP_STREAMING_IPADDR set from node table"
+               " (host '%s')\n", local_hostname);
+      } else if (rc == 1) {
+        /* No matching row - fall back to values already parsed from explicit keys */
+        printf("WARNING: No node-table entry found for host '%s' in '%s'\n",
+               local_hostname, config_file);
+        printf("WARNING: Falling back to VTP_STREAMING_MAC / VTP_STREAMING_IPADDR"
+               " from explicit config keys (if present)\n");
+      } else {
+        printf("ERROR: Node-table lookup failed (I/O error) for '%s'\n", config_file);
+        return -1;
+      }
+    } else {
+      printf("WARNING: Could not determine local hostname; skipping node-table lookup\n");
+    }
+  }
+
   /* Validate required VTP parameters */
   if (!params->have_vtp_rocid) {
     printf("ERROR: Missing required parameter: VTP_STREAMING_ROCID\n");
@@ -372,7 +404,8 @@ static int parse_user_config(const char *config_file, user_config_params_t *para
     return -1;
   }
   if (!params->have_vtp_mac) {
-    printf("ERROR: Missing required parameter: VTP_STREAMING_MAC\n");
+    printf("ERROR: VTP_STREAMING_MAC not set: add a node-table row for this host"
+           " OR add VTP_STREAMING_MAC explicitly to the config file\n");
     return -1;
   }
   if (!params->have_vtp_nstreams) {
@@ -380,7 +413,8 @@ static int parse_user_config(const char *config_file, user_config_params_t *para
     return -1;
   }
   if (!params->have_vtp_ipaddr) {
-    printf("ERROR: Missing required parameter: VTP_STREAMING_IPADDR\n");
+    printf("ERROR: VTP_STREAMING_IPADDR not set: add a node-table row for this host"
+           " OR add VTP_STREAMING_IPADDR explicitly to the config file\n");
     return -1;
   }
   if (!params->have_vtp_subnet) {
@@ -456,6 +490,142 @@ static int get_sanitized_hostname(char *hostname_buf, size_t bufsize)
   }
 
   return 0;
+}
+
+/**
+ * Truncate a hostname at the first '.' to get the short (unqualified) name.
+ * Result is written into short_buf (up to bufsize bytes including NUL).
+ */
+static void hostname_short(const char *fqdn, char *short_buf, size_t bufsize)
+{
+  const char *dot;
+  size_t len;
+
+  if (!fqdn || !short_buf || bufsize == 0) return;
+  dot = strchr(fqdn, '.');
+  len = dot ? (size_t)(dot - fqdn) : strlen(fqdn);
+  if (len >= bufsize) len = bufsize - 1;
+  memcpy(short_buf, fqdn, len);
+  short_buf[len] = '\0';
+}
+
+/**
+ * Validate and parse a MAC address string in "XX:XX:XX:XX:XX:XX" format.
+ * Returns: 0 on success, -1 on bad format.
+ */
+static int parse_mac_string(const char *s, unsigned char mac[6])
+{
+  unsigned int b[6];
+  int i;
+
+  if (!s || !mac) return -1;
+  if (sscanf(s, "%x:%x:%x:%x:%x:%x", &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) != 6)
+    return -1;
+  /* Each octet must be 0-255 */
+  for (i = 0; i < 6; i++) {
+    if (b[i] > 255) return -1;
+    mac[i] = (unsigned char)b[i];
+  }
+  return 0;
+}
+
+/**
+ * Validate and parse a dotted-decimal IP address "d.d.d.d".
+ * Returns: 0 on success, -1 on bad format.
+ */
+static int parse_ip_string(const char *s, unsigned char ip[4])
+{
+  unsigned int b[4];
+  int i;
+
+  if (!s || !ip) return -1;
+  if (sscanf(s, "%u.%u.%u.%u", &b[0], &b[1], &b[2], &b[3]) != 4)
+    return -1;
+  for (i = 0; i < 4; i++) {
+    if (b[i] > 255) return -1;
+    ip[i] = (unsigned char)b[i];
+  }
+  return 0;
+}
+
+/**
+ * Scan config_file for per-node lines of the form:
+ *   hostname  XX:XX:XX:XX:XX:XX  d.d.d.d
+ *
+ * These lines are distinguished from keyword-based entries by the absence of
+ * a leading VTP_* or FADC250_* keyword and the presence of a colon-separated
+ * MAC in the second field and a dotted-decimal IP in the third field.
+ * Blank lines and lines starting with '#' are skipped.
+ *
+ * local_hostname may be FQDN or short; both forms are matched against the
+ * hostname field (case-insensitive, short-name fallback).
+ *
+ * Returns:  0 - match found, mac_out and ip_out populated
+ *           1 - no matching hostname found (not an error by itself)
+ *          -1 - I/O error or malformed node line
+ */
+static int lookup_node_mac_ip(const char *config_file, const char *local_hostname,
+                               unsigned char mac_out[6], unsigned char ip_out[4])
+{
+  FILE *fp;
+  char line[1024];
+  char tok_host[256], tok_mac[64], tok_ip[64];
+  char local_short[256], line_short[256];
+  int line_num = 0;
+  int found = 0;
+
+  if (!config_file || !local_hostname || !mac_out || !ip_out) return -1;
+
+  /* Precompute short form of local hostname */
+  hostname_short(local_hostname, local_short, sizeof(local_short));
+
+  fp = fopen(config_file, "r");
+  if (!fp) {
+    printf("ERROR: lookup_node_mac_ip - Cannot open '%s': %s\n",
+           config_file, strerror(errno));
+    return -1;
+  }
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    line_num++;
+
+    /* Skip blank lines and comments */
+    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+    /* Skip lines that are clearly keyword-based config entries */
+    if (strncmp(line, "VTP_", 4) == 0 || strncmp(line, "FADC250_", 8) == 0) continue;
+
+    /* Try to parse exactly three whitespace-separated tokens */
+    if (sscanf(line, "%255s %63s %63s", tok_host, tok_mac, tok_ip) != 3) continue;
+
+    /* Validate MAC and IP format before treating this as a node line */
+    {
+      unsigned char tmp_mac[6], tmp_ip[4];
+      if (parse_mac_string(tok_mac, tmp_mac) != 0) continue;
+      if (parse_ip_string(tok_ip,  tmp_ip)  != 0) continue;
+
+      /* Both fields are valid - this is a node line.
+       * Now check if the hostname matches (FQDN or short, case-insensitive). */
+      hostname_short(tok_host, line_short, sizeof(line_short));
+
+      if (strcasecmp(tok_host, local_hostname) == 0 ||
+          strcasecmp(line_short, local_short)  == 0)
+      {
+        memcpy(mac_out, tmp_mac, 6);
+        memcpy(ip_out,  tmp_ip,  4);
+        printf("INFO: Node table match: host='%s' MAC=%02X:%02X:%02X:%02X:%02X:%02X"
+               " IP=%d.%d.%d.%d\n",
+               tok_host,
+               mac_out[0], mac_out[1], mac_out[2],
+               mac_out[3], mac_out[4], mac_out[5],
+               ip_out[0], ip_out[1], ip_out[2], ip_out[3]);
+        found = 1;
+        break;
+      }
+    }
+  }
+
+  fclose(fp);
+  return found ? 0 : 1;
 }
 
 /**
