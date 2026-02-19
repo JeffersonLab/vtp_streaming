@@ -1,0 +1,25 @@
+VTP_CRATE all
+
+#VTP_FIRMWARE fe_vtp_halla_v7_compton.bin
+
+VTP_REFCLK  250
+
+VTP_W_OFFSET 4000
+VTP_W_WIDTH 4000
+
+
+#        slot: 10 13  9 14  8 15  7 16  6 17  5 18  4 19  3 20
+#     payload:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+VTP_PAYLOAD_EN  0  0  0  0  0  0  0  0  0  0  0  0  1  0  1  0
+
+#      fiber:  1  2  3  4
+VTP_FIBER_EN   1  0  0  0
+
+# Setup Firmware specific USER stuff here
+#
+
+
+
+
+VTP_CRATE end
+

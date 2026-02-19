@@ -1,0 +1,40 @@
+VTP_CRATE davtp2
+
+# Streaming V2 firmware
+VTP_FIRMWARE_Z7           fe_vtp_z7_streamingv2_jan27.bin
+VTP_FIRMWARE_V7           fe_vtp_v7_fadc_streamingv2_jan27.bin
+
+#        slot: 10 13  9 14  8 15  7 16  6 17  5 18  4 19  3 20
+#     payload:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+VTP_PAYLOAD_EN  0  1  0  1  1  0  1  0  0  1  0  1  1  0  1  0
+
+VTP_STREAMING_ROCID       0
+VTP_STREAMING_NFRAME_BUF  1000
+VTP_STREAMING_FRAMELEN    65536
+
+###################################################
+#VTP FADC Streaming event builder #0 (slots 3-10) #
+###################################################
+VTP_STREAMING             0
+
+VTP_STREAMING_MAC         0xCE 0xBA 0xF0 0x03 0x00 0xDB
+
+# FADC Slot               3  4  5  6  7  8  9 10
+VTP_STREAMING_SLOT_EN     1  1  0  0  1  1  0  0
+
+VTP_STREAMING_SOURCE_ID   0
+
+VTP_STREAMING_IPADDR      129  57 109 120
+VTP_STREAMING_SUBNET      255 255 255   0
+VTP_STREAMING_GATEWAY     129  57 109   1
+
+#indra-s1: 129.57.109.230
+VTP_STREAMING_DESTIP      129  57 109 230
+#note: port will be overridden by rol (settings from DB)
+VTP_STREAMING_DESTIPPORT  6000
+
+VTP_STREAMING_CONNECT     1
+
+
+VTP_CRATE end
+

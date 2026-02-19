@@ -1,0 +1,23 @@
+VTP_CRATE davtp2
+
+
+# Firmware files should be in /usr/local/src/vtp/firmware
+#VTP_FIRMWARE_Z7           fe_vtp_vxs_readout_z7_jun11.bin
+VTP_FIRMWARE_Z7           fe_vtp_vxs_readout_z7_jul9.bin
+VTP_FIRMWARE_V7           fe_vtp_vxs_readout_v7_may4.bin
+
+# This defines the mask used to enable all Payload ports that
+# will be read out by the ROC. 
+# probably should be done as part of vtpRocEbConfig() instead
+#        slot: 10 13  9 14  8 15  7 16  6 17  5 18  4 19  3 20
+#     payload:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+VTP_PAYLOAD_EN  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+# ROC Parameters
+VTP_ROC_ROCID  36
+VTP_ROC_DEST_IP 81396de7
+VTP_ROC_DEST_PORT  46102
+
+
+# Close the config file
+VTP_CRATE end
