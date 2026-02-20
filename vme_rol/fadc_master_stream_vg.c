@@ -158,6 +158,15 @@ static void init_config_params(user_config_params_t *params)
   /* VTP parameters - no defaults, must be specified in config */
 }
 
+/****************************************
+ * FORWARD DECLARATIONS
+ ****************************************/
+static int get_sanitized_hostname(char *hostname_buf, size_t bufsize);
+static int parse_mac_string(const char *s, unsigned char mac[6]);
+static int parse_ip_string(const char *s, unsigned char ip[4]);
+static int lookup_node_mac_ip(const char *config_file, const char *local_hostname,
+                               unsigned char mac_out[6], unsigned char ip_out[4]);
+
 /**
  * Parse user configuration file to extract both VME and VTP parameters.
  * Returns: 0 on success, -1 on failure
