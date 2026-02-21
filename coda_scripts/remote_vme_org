@@ -1,0 +1,128 @@
+#!/bin/bash
+#
+# remote_vme <hostname> <username> <command for remote host>
+#
+CRATE=
+USER_ARG=
+SSH_ARG=
+CONNECT_TIMEOUT=600
+USENMAP=1
+
+isConnected=0
+iter=0
+
+if [ "$#" -lt 3 ]; then  #server name provided
+    echo "ERROR: Mush have 3 arguments!"
+    echo "  $# args provided: $@"
+    exit 1
+fi
+
+CRATE=$1
+if [ "$2" == "nobody" ]; then
+    USER_ARG=
+else
+    USER_ARG="-l $2"
+fi
+
+shift 2
+SSH_ARG="$@"
+
+SSH_COMMAND="ssh -t -o ServerAliveInterval=10 $USER_ARG $CRATE $SSH_ARG"
+trap "exit" exit
+
+function updateTicker()
+{
+    let "iter += 1"
+    case "$iter" in
+	0 ) printf " - " "";;
+	1 ) printf " \ " "";;
+	2 ) printf " | " "";;
+	3 ) printf " / " ""; iter=-1;
+    esac
+}
+
+function check4nmap()
+{
+    nmap -version &> /dev/null
+    rval=$?
+
+    if [ "$rval" = "0" ]; then
+	USENMAP=1
+    else
+	USENMAP=0
+    fi
+
+}
+
+function checkCrate()
+{
+    local __hostname=$1
+    local tmpfile=`mktemp`
+    local statHostname=''
+
+    if [ "$USENMAP" = "1" ]; then
+	nmap -oG $tmpfile -T5 -p22 $__hostname > /dev/null
+	statHostname=`grep -v "^#" $tmpfile | grep $CRATE | grep open`
+
+	/bin/rm -f $tmpfile
+    else
+	ssh -x -o ConnectTimeout=1 $__hostname echo
+	local rval=$?
+	if [ "$rval" = 0 ]; then
+	    statHostname="ok"
+	fi
+    fi
+
+
+
+    printf "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+    if [ -z "$statHostname" ]; then
+        printf "${CRATE}: Disconnected" ""
+        updateTicker
+	isConnected=0
+    else
+        printf "${CRATE}: Connected" ""
+	echo
+	isConnected=1
+    fi
+
+}
+
+if [ "$USENMAP" = "1" ]; then
+    check4nmap
+fi
+
+while true; do
+
+    STARTTIME=$(date '+%s')
+    while [ $isConnected == 0 ]; do
+	checkCrate $CRATE isConnected
+	if [ $isConnected == 0 ]; then
+	    CURRENT=$(date '+%s')
+	    TIMEDIFF=$(($CURRENT-$STARTTIME))
+	    if [ "$TIMEDIFF" -gt "$CONNECT_TIMEOUT" ]; then
+		echo
+		echo "Connection Timeout"
+		exit;
+	    fi
+#	    echo TIMEDIFF = $TIMEDIFF
+	    sleep 5
+	else
+	    CURRENT=0
+	fi
+    done
+
+    echo
+    echo "****************************************"
+    echo "* SSHing to $CRATE"
+    echo "****************************************"
+    date
+    echo
+    ${SSH_COMMAND}
+    isConnected=0
+    echo
+    echo "****************************************"
+    echo "* ssh KILLED... RESTARTING"
+    echo "****************************************"
+    echo
+done

@@ -1,0 +1,43 @@
+############################################################
+#
+# platform.service
+#
+#    - Systemd Unit file for the CODA 3.x platform service
+#
+#  Usage:
+#
+#    1. In [Service] below, replace the "Environment", "User",
+#       and "ExecStart" to match your CODA environment
+#
+#    2. Enable (as root):
+#         systemctl enable $PWD/platform.service
+#
+#    3. Start (as root):
+#         systemctl start platform
+#
+#   Restart with (either):
+#     - As root
+#         systemctl restart platform
+#
+#     - As "User"
+#         killall coda_platform.sh
+#
+
+
+[Unit]
+Description=CODA3 Platform
+After=network.target ypbind.service sssd.service network-online.target remote-fs.target autofs.service
+Wants=network-online.target autofs.service
+Requires=autofs.service
+
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=idaq
+ExecStart=/opt/idaq/coda/coda_scripts/coda_platform.sh
+ExecStop=/bin/pkill -f -TERM coda_platform.sh
+
+[Install]
+WantedBy=multi-user.target

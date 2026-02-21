@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# startCoda script
+#
+platform &
+sleep 10
+startXterms &
+startRcgui &

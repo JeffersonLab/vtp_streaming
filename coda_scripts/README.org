@@ -1,0 +1,157 @@
+#+TITLE: coda_scripts
+
+Author:
+- Bryan Moffit
+  - TJNAF Fast Electronics and Data Acquisition
+
+* What is this for?
+A collection scripts for use with DAQs running [[https://coda.jlab.org][CODA 3]]
+
+* What do I do with it?
+
+** Install and Configuration
+*** Setup host ssh key for automated login to CODA component clients.
+  * [[https://www.ssh.com/ssh/keygen/][ssh-keygen: Generate a New SSH Key]]
+
+*** Install scripts on CODA 3 Platform host, ROC and PEB clients.
+ If you're not sharing this directory with the CODA Components (e.g. with NFS), repeat *all* of the steps for each component.
+
+- With git
+#+begin_src shell
+git clone git@github.com:JeffersonLab/coda_scripts.git ~/coda/coda_scripts
+#+end_src
+- From zip
+#+begin_src shell
+unzip coda_scripts-master.zip ~/coda/
+mv coda_scripts-master coda_scripts
+#+end_src
+
+*** Configure environment variables in ~setupCODA3.tcsh~ or ~setupCODA3.bash~
+The setup file depends on your CODA Component's default shell
+**** ~setupCODA3.bash~
+#+begin_src shell
+  # if undefined, use /site
+  : ${CODA:=/site/coda/3.10_devel}
+
+  # CODA/.setup overwrites SESSION and EXPID, save them, or set the default values
+  SAVE_SESSION=${SESSION:-session}
+  SAVE_EXPID=${EXPID:-expid}
+
+  # Default COOL_HOME and JAVA_HOME
+  : ${COOL_HOME:=${HOME}/coda/cool}
+  : ${JAVA_HOME:=${HOME}/jdk1.8.0_152}
+
+
+  # Default REMEX variables
+  : ${REMEX_CMSG_HOST:=thishost.jlab.org}
+  : ${REMEX_CMSG_PASSWORD:=${EXPID}}
+
+  # Default CODA_COMPONENT_TABLE
+  : ${CODA_COMPONENT_TABLE:=${CODA_SCRIPTS}/config/${EXPID}/coda_component_table.cfg}
+#+end_src
+
+**** ~setupCODA3.tcsh~
+#+begin_src shell
+setenv CODA_SCRIPTS ${HOME}/coda/coda_scripts
+
+setenv CODA /site/coda/3.10_devel
+
+setenv SESSION session
+setenv EXPID expid
+
+setenv COOL_HOME ${HOME}/coda/cool
+setenv JAVA_HOME ${HOME}/jdk1.8.0_152
+
+setenv REMEX_CMSG_HOST thishost.jlab.org
+setenv REMEX_CMSG_PASSWORD ${EXPID}
+
+setenv CODA_COMPONENT_TABLE ${CODA_SCRIPTS}/config/${EXPID}/coda_component_table.cfg
+#+end_src
+
+*** Source the ~setupCODA3.{tcsh,bash}~ in shell setup file for each DAQ component
+
+**** ~.bashrc~
+#+begin_src shell
+  export CODA_SCRIPTS=~/coda/coda_scripts
+  source $CODA_SCRIPTS/setupCODA3.bash
+#+end_src
+
+**** ~.tcshrc~
+#+begin_src shell
+  setenv CODA_SCRIPTS=~/coda/coda_scripts
+  source $CODA_SCRIPTS/setupCODA3.tcsh
+#+end_src
+
+**** Note
+Similar lines may need to be set in the corresponding ~.bash_profile~ and / or ~.profile~.  One way to accomplish this is to softlink them to your ~.bashrc~ / ~.tcshrc~
+- e.g. *BASH*
+#+begin_src shell
+  cd ${HOME}
+  ln -s .bashrc .bash_profile
+#+end_src
+
+*** Modify the config file adding each DAQ component on the host
+ The file defined by ~$CODA_COMPONENT_TABLE~ specifies the components that will interact with these scripts
+
+**** File format:
+#+begin_example
+HOSTNAME   COMPONENT_TYPE    COMPONENT_NAME   OPTIONAL_ARG
+#+end_example
+
+***** Examples
+- I have a *PEB* named *PEB1* running on *daqpc1*:
+#+begin_example
+daqpc1   PEB   PEB1
+#+end_example
+- I have a *ROC* named *ROC2* running on *daqroc2* and needs to run a tcl script to set it's randy factor on startup:
+#+begin_example
+daqroc2  ROC   ROC2  -t setrf.tcl
+#+end_example
+
+*** Start the platform 
+
+**** As a systemd service
+- In ~$CODA_SCRIPTS/platform.service~, modify the ~ExecStart~ to point to the script location and ~User~ to the daq user.  e.g.
+#+begin_example
+User=thisuser
+ExecStart=/home/thisuser/coda/coda_scripts/coda_platform.sh
+#+end_example
+
+- Modify the ~$CODA_SCRIPTS/platform.sh~ script for the location of ~setupCODA3.bash~. e.g.
+#+begin_example
+source /home/thisuser/coda/coda_scripts/setupCODA3.bash
+#+end_example
+
+- Enable the platform service (as root).
+#+begin_src shell
+systemctl enable /home/thisuser/coda/coda_scripts/platform.service
+#+end_src
+
+- Start the platform service
+#+begin_src shell
+systemctl start platform
+#+end_src
+  
+** Run CODA
+
+*** Setup a new ~COOL_HOME~ (stores CODA configurations)
+- Run ~jcedit~
+- Create new *COOL* database
+- Expert -> Session -> New
+  - Enter *SESSION* name (matches that defined in environment)
+
+*** Launch CODA3 and its components
+#+begin_src shell
+startCoda
+#+end_src
+
+*** Restart ONLY the PEB and ROC components
+#+begin_src shell
+restartStuff
+#+end_src
+
+*** Kill ALL CODA components started by ~startCoda~
+#+begin_src shell
+kcoda
+#+end_src
+        

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+pids=$(ps -ef | grep "Dpe" | awk '{print $3}')
+for pid in $pids; do
+kill -9 $pid
+done
+
+pids=$(ps -ef | grep "ersap-orchestrator"  | awk '{print $3}')
+for pid in $pids; do
+kill -9 $pid
+done
+
+pids=$(ps -ef | grep "GenericOrchestrator"  | awk '{print $3}')
+for pid in $pids; do
+kill -9 $pid
+done

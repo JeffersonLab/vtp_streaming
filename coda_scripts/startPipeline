@@ -1,0 +1,7 @@
+#!/bin/bash
+#
+startCoda 
+
+xterm -hold -e "et_start -f /tmp/et_experiment_2_ERSAP -v -d -n 1000 -s 1000000 -p 23911"&
+xterm -hold -e "$ERSAP_HOME/bin/ersap-shell" &
+

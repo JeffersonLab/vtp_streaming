@@ -1,0 +1,7 @@
+#!/bin/bash
+#
+# Bash script to start up the RCGUI
+#
+
+source ${CODA_SCRIPTS}/setupCODA3.bash
+${CODA_BIN}/rcgui

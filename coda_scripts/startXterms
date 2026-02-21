@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+# Bash script to start up Xterm Windows for ROCs and EBs
+#
+
+TEST=0
+ARGS=$@
+
+if [ ${#@} -gt 0 ]; then
+    # Get the CODA_COMPONENT_TABLE
+    CODA_COMPONENT_TABLE=$1
+fi
+
+#echo "Using CODA_COMPONENT_TABLE=${CODA_COMPONENT_TABLE}"
+
+XTERM_EXE="xterm"
+XTDIM=80x19
+DEF_XINCR=510
+DEF_YINCR=280
+DEF_YSIZE=4
+
+# These are the first displayed
+FIRST_XPOS=0
+FIRST_YPOS=30
+
+. ${CODA_SCRIPTS}/coda_conf_functions
+. ${CODA_SCRIPTS}/coda_xterms_functions
+
+
+starting_xterms_message
+
+# Kill all previous Xterms remnants
+if [ "$TEST" == "0" ]; then
+    kXterms
+fi
+
+# Launch the FPGAs
+launch_xterm_group FPGA $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the ROCs
+launch_xterm_group ROC $last_xpos  ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the PEBs
+launch_xterm_group PEB $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the PAGGs
+launch_xterm_group PAGG $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the SEBs
+launch_xterm_group SEB $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the ERs
+launch_xterm_group ER $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the DCs
+launch_xterm_group DC $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}
+
+# Launch the TSs
+launch_xterm_group TS $last_xpos ${DEF_XINCR} $last_ypos ${DEF_YINCR} ${DEF_YSIZE}

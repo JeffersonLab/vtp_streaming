@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+#  restartXterms: restart CODA components started with startXterms
+#     They should restart on their own, if they are run with
+#     the startXterms script
+#
+
+if [ ${#@} -gt 0 ]; then
+    # Get the CODA_COMPONENT_TABLE
+    CODA_COMPONENT_TABLE=$1
+fi
+
+#echo "Using CODA_COMPONENT_TABLE=${CODA_COMPONENT_TABLE}"
+
+. ${CODA_SCRIPTS}/coda_xterms_functions
+
+# Check first for any running remote_vme
+verify_or_die "Restart All CODA Components"
+
+. ${CODA_SCRIPTS}/coda_conf_functions
+
+TYPES=( "TS" "ROC" "FPGA" "PEB" "SEB" "ER" "DC" )
+
+for type in ${TYPES[@]}
+do
+    coda_conf_get_component_list $type
+    if [ $? == 1 ] ; then
+	hosts=${CODA_HOSTNAME_LIST[@]}
+
+	case "$type" in
+	    "TS" )
+		KILLSTRING="coda_ts"
+		;;
+	    "ROC" | "FPGA" )
+		KILLSTRING="coda_roc"
+		;;
+	    "PEB" | "ER" | "SEB" | "DC" )
+		KILLSTRING="-f org.jlab.coda.emu.EmuFactory"
+		;;
+	esac
+
+	# now kill the ROC, if it's still runnin gon the remote host
+	for host in $hosts
+	do
+	    echo "  Restarting $type on $host"
+	    ssh -x -f $host pkill $KILLSTRING
+	done
+    fi
+
+done
+
+exit

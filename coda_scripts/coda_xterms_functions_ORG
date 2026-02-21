@@ -1,0 +1,102 @@
+# -*-Shell-script-*-
+#
+
+verify_or_die() {
+    action=$1
+    zenity --question --text "Are you sure you want to $action" --no-wrap --ok-label "YES" --cancel-label "NO"
+    decision=$?
+    if [ "$decision" == "1" ]; then
+	echo will die
+	exit 0;
+    fi
+}
+
+starting_xterms_message() {
+    zenity --notification \
+	   --text "Starting CODA Component Xterms" &
+}
+
+set_xterm_title_cmd() {
+    local hostname=$1
+    local component=$2
+    local name=$3
+    local option=
+
+    codaconf_get_name_option $hostname $name
+    option=$CODA_COMPONENT_OPTION
+
+    XTERM_TITLE="$hostname : $component: $name"
+    XTERM_CMD="remote_vme $hostname nobody ${CODA_SCRIPTS}/start$component.sh $name $option"
+
+    case "$component" in
+	"ROC" )
+	    XTERM_COLOR="lightgreen"
+	    ;;
+	"FPGA" )
+	    XTERM_COLOR="lightgreen"
+	    ;;
+	"TS" )
+	    XTERM_COLOR="yellow"
+	    ;;
+	"PEB" )
+	    XTERM_COLOR="lightblue"
+	    ;;
+	"ER" )
+	    XTERM_COLOR="tan"
+	    ;;
+	"SEB" )
+	    XTERM_COLOR="orange"
+	    ;;
+	"DC" )
+	    XTERM_COLOR="grey"
+	    ;;
+	"PAGG" )
+	    XTERM_COLOR="lightblue"
+	    ;;
+    esac
+
+    if [ "$TEST" == "1" ]; then
+	XTERM_CMD="read"
+    fi
+}
+
+size=0
+last_xpos=$FIRST_XPOS
+last_ypos=$FIRST_YPOS
+launch_xterm_group() {
+    local type=$1
+    local xpos=$2
+    local xposincr=$3
+    local ypos=$4
+    local yposincr=$5
+    local ysize=$6
+    local ypos_orig=$ypos;
+
+    coda_conf_get_component_list $type
+    if [ $? == 1 ] ; then
+	coda_hosts=${CODA_HOSTNAME_LIST[@]}
+	for host in $coda_hosts
+	do
+	    if [ "$TEST" == "1" ]; then
+		echo "x: $xpos  y: $ypos  size: $size"
+	    fi
+
+	    codaconf_get_component_name $host $type
+	    set_xterm_title_cmd $host $type $CODA_COMPONENT_NAME
+	    ${XTERM_EXE} -geometry $XTDIM+$xpos+$ypos -T "$XTERM_TITLE" -bg "$XTERM_COLOR" \
+		  -e /bin/bash -c "$XTERM_CMD" &
+	    size=$(echo "$size+1" | bc)
+	    if [ "$size" == "$ysize" ]; then
+		xpos=$(echo "$xpos+$xposincr" | bc)
+		ypos=$FIRST_YPOS
+		size=0
+	    else
+		ypos=$(echo "$ypos+$yposincr" | bc)
+	    fi
+	done
+
+    fi
+
+    last_xpos=$xpos
+    last_ypos=$ypos
+}
