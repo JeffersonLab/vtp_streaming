@@ -1,0 +1,7 @@
+# VTPHOST         Z7FPGA_FIRMWARE        V7FPGA_FIRMWARE
+
+dafarm18	 fe_vtp_z7_streaming_may22_1411.bin	fe_vtp_v7_fadc_streaming_aug20_0853.bin
+davtp1	 fe_vtp_z7_streaming_may22_1411.bin	fe_vtp_v7_fadc_streaming_aug20_0853.bin
+davtp2	 fe_vtp_hallb_z7.bin	fe_vtp_halla_v7_compton.bin
+
+

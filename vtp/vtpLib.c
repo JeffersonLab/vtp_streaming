@@ -490,14 +490,17 @@ vtpStats()
     printf("Event Building:\n");
     printf("    MIG  Control            : %08X %08x\n", mig[0][0], mig[1][0]);
     printf("    MIG calibration complete: %8d %8d\n", mig[0][1], mig[1][1]);
-    printf("    EBIORX Control          : %08X %08X\n",ebiorx[0][0], ebiorx[1][0]);
+    printf("    EBIORX [0] [1]  Control : %08X %08X\n",ebiorx[0][0], ebiorx[1][0]);
+    printf("    EBIORX[0] Status2       : %08X %08X %08X %08X\n",
+	   vtp->ebiorx[0].status2[0], vtp->ebiorx[0].status2[2], vtp->ebiorx[0].status2[1], vtp->ebiorx[0].status2[3]);
+    printf("    EBIORX[1] Status2       : %08X %08X %08X %08X\n",
+	   vtp->ebiorx[1].status2[0], vtp->ebiorx[1].status2[2], vtp->ebiorx[1].status2[1], vtp->ebiorx[1].status2[3]);
 
     if(VTP_FW_Type[0] == VTP_FW_TYPE_FADCSTREAM) {
       printf("    EB Control : 0x%08X\n", ebctrl[0]);
       printf("    EB Control2: 0x%08X\n", ebctrl[1]);
       printf("    EB Control3: 0x%08X\n", ebctrl[2]);
       printf("    EB Status  : 0x%08X\n", ebstatus);
-      printf("    EB FrameCnt: 0x%08X\n", fcnt[0]);
 
       for(i=0;i<16;i++) {
 	if(ppmask&(1<<i))
@@ -635,7 +638,7 @@ vtpNetStats()
 	printf("    PCS Status      = 0x%08x (Link Up)\n",pcs_status[i]);
       else
 	printf("    PCS Status      = 0x%08x (No link)\n",pcs_status[i]);
-	
+
       printf("    PHY Status      = 0x%08x\n",phy_status[i]);
     }
 
@@ -2135,8 +2138,9 @@ vtpStreamingEnd()
 
     Ctrl  Reg: bit(31): Reset   bits(29-16): frame length in ns   bits(15-0): PP enable mask
     rocid Reg:                                                    bits(15-0): ROC_ID
-    Ctrl3 Reg:    bit(7): Enable Input Stream Port            bit(6): Enable AsyncFifo port
-               bits(5-4): Active Network port for AsyncFifo   bit(3): Enable cMsg Header  
+    Ctrl3 Reg:    bit(8): Enable EJFAT Headers (UDP only)
+                  bit(7): Enable Input Stream Ports            bit(6): Enable AsyncFifo port
+               bits(5-4): Active Network port for AsyncFifo    bit(3): Enable cMsg Header  
                bits(2-0): Total # of Streams (max 4)
 
     pp_cfg Reg: bits(31-30): Network Port                          bits(3-0): PP Module ID (FADC=1)
@@ -2245,20 +2249,23 @@ vtpStreamingGetEbFrameCnt(int stream)
 
 
 
-/* enable specific input data processing and then enable the EB */
+/* enable specific input (either AsyncFifo or VXS stream) data processing 
+   based on the mask   0x40 - Async Fifo, 0x80 - VXS  or  0xC0 - both */
 int
-vtpStreamingEbEnable(int mask)
+vtpStreamingEbEnable(unsigned int mask)
 {
+  //  unsigned int temp=0;
 
   /* check that mask is valid  */
-  if((mask&VTP_STREB_ENABLE_MASK) != 0) {
-    printf("vtpStreamingEbEnable: Invalid mask (0x%x)\n",mask);
+  if((mask&~VTP_STREB_ENABLE_MASK) != 0) {
+    printf("ERROR: vtpStreamingEbEnable: Invalid mask (0x%x)\n",mask);
     return ERROR;
   }
   
-  VLOCK;;
-  vtp->v7.streamingEb.Ctrl3 |= mask;      /*set the bits */
-  vtp->v7.streamingEb.Ctrl &= 0x7FFFFFFF; /* Enable the EB */
+  VLOCK;
+  //temp = (vtp->v7.streamingEb.Ctrl3)&~VTP_STREB_ENABLE_MASK;
+  vtp->v7.streamingEb.Ctrl3 |= (mask);
+  vtp->v7.streamingEb.Ctrl &= 0x7FFFFFFF;
   VUNLOCK;
 
   return OK;
@@ -2266,25 +2273,25 @@ vtpStreamingEbEnable(int mask)
 
 /* Stop specific input data (either Streams or AsyncFifo) for processing */
 int
-vtpStreamingEbDisable(int dmask)
+vtpStreamingEbDisable(unsigned int mask)
 {
+  unsigned int temp=0;
 
   /* check that mask is valid  */
-  if((dmask&VTP_STREB_ENABLE_MASK) != 0) {
-    printf("vtpStreamingEbDisable: Invalid mask (0x%x)\n",dmask);
+  if((mask&~VTP_STREB_ENABLE_MASK) != 0) {
+    printf("ERROR: vtpStreamingEbDisable: Invalid mask (0x%x)\n",mask);
     return ERROR;
   }
 
   VLOCK;
-  vtp->v7.streamingEb.Ctrl3 &= ~(dmask);
-  vtp->v7.streamingEb.Ctrl |= 0x80000000;  /* Disable the EB */
+  temp = (vtp->v7.streamingEb.Ctrl3);
+  vtp->v7.streamingEb.Ctrl3 = ~(mask)&temp;
   VUNLOCK;
 
 
   return OK;
 }
 
-/* Disable Reset for Streaming EB  - This allows the EB to process streams and Async Events */
 void
 vtpStreamingEbGo()
 {

@@ -337,18 +337,18 @@ typedef struct V7Mig_Struct
 //} FADCSTREAMING_REGS;
 
 
-#define VTP_STREB_PP_STREAM_EN    0x80
-#define VTP_STREB_ASYNC_FIFO_EN   0x40
-#define VTP_STREB_CMSG_HDR_EN     0x08
-#define VTP_STREB_EJFAT_EN        0x100
-#define VTP_STREB_ENABLE_MASK     0xFFFFFE37
-#define VTP_STREB_AFIFO_MASK      0x30
-#define VTP_STREB_STREAM_MASK     0x07
+#define VTP_STREB_PP_STREAM_EN   0x080
+#define VTP_STREB_ASYNC_FIFO_EN  0x040
+#define VTP_STREB_CMSG_HDR_EN    0x008
+#define VTP_STREB_AFIFO_MASK     0x030
+#define VTP_STREB_STREAM_MASK    0x007
+#define VTP_STREB_EJFAT_EN       0x100
+#define VTP_STREB_ENABLE_MASK    0x000001C8
 
 //   Streaming EB Registers
 //   Ctrl  : EB_Reset(31), Frame_len(29-16), PP_Enable_mask(15-0)
 //   rocid : ROC_ID(15-0)
-//   Ctrl3 : Stream_Enable(7), AsyncFifo Enable(6) CPU_EVT_INFO_PORT(5-4), CMSG_HDR_ENABLE(3), Total_Streams(2-0)
+//   Ctrl3 : EJFAT_Enable(8) Stream_Enable(7), AsyncFifo Enable(6) CPU_EVT_INFO_PORT(5-4), CMSG_HDR_ENABLE(3), Total_Streams(2-0)
 //   pp_cfg: Network_Port(31-30), PP_Module_ID(3-0)
 //
 //   Async Event Info     bit29-0    length in words
@@ -982,7 +982,8 @@ typedef struct
   /** 0x00B0 */ volatile uint32_t pkts_sent[2][2];   // 48 bit counter for each output   [port][32L/16H]
   /** 0x00C0 */ volatile uint32_t frames_sent[2][2];
   /** 0x00D0 */ volatile uint32_t bytes_sent[2][2];
-  /** 0x00E0 */ BLANK[(0x0100-0x00E0)/4];
+  /** 0x00E0 */ volatile uint32_t status2[4];
+  /** 0x00E0 */ BLANK[(0x0100-0x00F0)/4];
 } EBIORX_REGS;
 
 
@@ -1340,8 +1341,8 @@ int vtpStreamingTcpConnect(int inst, int connect, unsigned int *cdata, int dlen)
 int vtpStreamingEvioWriteControl(int inst, unsigned int type, unsigned int val0, unsigned int val1);
 int vtpStreamingSetEbCfg(int mask, int nstreams, int frame_len, int roc_id, PP_CONF *ppInfo);
 void vtpStreamingAsyncInfoWrite(int val);
-int vtpStreamingEbEnable(int mask);
-int vtpStreamingEbDisable(int mask);
+int vtpStreamingEbEnable(unsigned int mask);
+int vtpStreamingEbDisable(unsigned int mask);
 void vtpStreamingEbGo();
 void vtpStreamingEbReset();
 int vtpStreamingSetEbRocid(int roc_id);
